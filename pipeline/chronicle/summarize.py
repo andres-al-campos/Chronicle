@@ -266,6 +266,7 @@ def summarize_one(
     *,
     pending_context: str,
     model: str | None = None,
+    effort: str | None = None,
 ) -> bool:
     """Returns True on success, False on failure. Mutates state on success."""
     conv_meta = state["conversations"].get(uuid)
@@ -446,6 +447,7 @@ def summarize_one(
                 _instruction_file(),
                 input_text,
                 model=model,
+                effort=effort,
             )
         except ClaudeInvocationError as e:
             print(f"  ✗ {uuid[:8]} — claude error (incremental): {e}", flush=True)
@@ -465,6 +467,7 @@ def summarize_one(
                 _instruction_file(),
                 input_text,
                 model=model,
+                effort=effort,
             )
         except ClaudeInvocationError as e:
             print(f"  ✗ {uuid[:8]} — claude error: {e}", flush=True)
@@ -557,6 +560,7 @@ def summarize_one(
                     _instruction_file(),
                     input_text,
                     model=model,
+                    effort=effort,
                 )
             except ClaudeInvocationError as e:
                 print(f"  ✗ {uuid[:8]} — claude error on segment {i}/{n_chunks}: {e}", flush=True)
@@ -783,9 +787,10 @@ def run(args: Any) -> None:
     pending_context = _read_pending_context()
     workers = max(1, int(getattr(args, "workers", 1) or 1))
     model = getattr(args, "model", None) or "sonnet"
+    effort = getattr(args, "effort", None) or "low"
     print(
         f"Summarizing {len(targets)} conversation(s). "
-        f"Model: {model} · workers: {workers}"
+        f"Model: {model} · effort: {effort} · workers: {workers}"
     )
     succeeded = 0
     failed = 0
@@ -797,7 +802,7 @@ def run(args: Any) -> None:
         # only guards the save.
         ok = summarize_one(
             uuid, state, pending_context=pending_context,
-            model=model,
+            model=model, effort=effort,
         )
         if ok:
             with state_lock:

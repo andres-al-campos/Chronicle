@@ -878,8 +878,8 @@ def _run_one(args: Any) -> None:
         + "\n\n---\n\n".join(f"{it['heading']}\n\n{it['body']}" for it in items)
     )
 
-    model = getattr(args, "model", None) or "claude-opus-4-7"
-    effort = getattr(args, "effort", None) or "max"
+    model = getattr(args, "model", None) or "claude-opus-5"
+    effort = getattr(args, "effort", None) or "low"
     print(f"  Model: {model} · effort: {effort} (extended thinking)")
     try:
         output = run_claude(
