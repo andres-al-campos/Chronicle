@@ -130,6 +130,21 @@ _WIKILINK_RE = re.compile(r"\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]")
 # i.e. the model wrote just the UUID portion, not the full slug.
 _SHORT_UUID_RE = re.compile(r"^[0-9a-f]{8,}$", re.IGNORECASE)
 
+# A "period label" is what the model writes when it references another entry
+# by its calendar period rather than its filename: 2026_Q1, 2026-03-H1,
+# 2026_Apr_H2, 2026_04_H1-H2, 2026. Accepts the accepted-input variants
+# (underscore/hyphen separators, abbreviated or numeric months) — canonical_label
+# normalizes them before lookup. A bare year (2026) is included; four bare digits
+# are unambiguous as a period here. We deliberately don't try to match anything
+# looser, so ordinary slug wikilinks (which contain a headline) pass through.
+_PERIOD_LABEL_RE = re.compile(
+    r"^\d{4}"                                  # year
+    r"(?:[_-](?:Q[1-4]|[A-Z][a-z]{2}|0[1-9]|1[0-2])"  # _Q2 / _Apr / _04
+    r"(?:[_-]H[12](?:-H2)?)?"                   # optional _H1 / _H2 / _H1-H2
+    r")?$",
+    re.IGNORECASE,
+)
+
 
 def _build_uuid_to_slug(state: dict[str, Any]) -> dict[str, str]:
     """Build a lookup from UUID (or UUID prefix) → full slug stem.
@@ -201,5 +216,91 @@ def fix_inline_links(text: str, state: dict[str, Any]) -> str:
         n_fixed = len(orig_short) - len(new_short)
         if n_fixed > 0:
             print(f"  ✓  Fixed {n_fixed} short-UUID link(s) → full slugs")
+
+    return result
+
+
+def _build_period_to_stem(state: dict[str, Any]) -> dict[str, str]:
+    """Build a lookup from canonical period label → entry-file stem.
+
+    Entry files are named with a date-prefixed, headline slug
+    (`2026-Q1_quitting-and-building-frameworks_Entry`), but the model writes
+    the bare period label (`2026_Q1`) when it cross-references another entry.
+    Keys are canonical labels (the same form that keys `state["entries"]`),
+    so a target normalized via `canonical_label` resolves regardless of the
+    separator or month form the model happened to use.
+    """
+    from .calendar import PeriodParseError, canonical_label
+
+    mapping: dict[str, str] = {}
+    for label, entry in state.get("entries", {}).items():
+        ef = entry.get("entry_file")
+        if not ef:
+            continue
+        stem = Path(ef).stem  # e.g. "2026-Q1_quitting-and-building-frameworks_Entry"
+        try:
+            canon = canonical_label(label)
+        except PeriodParseError:
+            canon = label
+        mapping[canon] = stem
+    return mapping
+
+
+def fix_period_links(text: str, state: dict[str, Any]) -> str:
+    """Replace bare period-label wikilinks with the target entry's slug stem.
+
+    The period sibling of `fix_inline_links`. Scans for ``[[<target>]]`` or
+    ``[[<target>|<alias>]]`` where ``<target>`` is a calendar period label
+    (``2026_Q1``, ``2026-03-H1``, ``2026_Apr_H2`` …). Looks the canonicalized
+    label up in ``state["entries"]`` and rewrites it to the entry-file stem so
+    the wikilink actually resolves in Obsidian. Non-period targets — full
+    slugs, UUIDs, headings — are left untouched. Warns on any period label
+    that has no matching entry.
+    """
+    from .calendar import PeriodParseError, canonical_label
+
+    period_to_stem = _build_period_to_stem(state)
+    unresolved: list[str] = []
+    fixed = 0
+
+    def _replace(m: re.Match) -> str:
+        nonlocal fixed
+        target = m.group(1).strip()
+        alias = m.group(2)
+
+        if not _PERIOD_LABEL_RE.match(target):
+            return m.group(0)  # not a period label — leave alone
+
+        try:
+            canon = canonical_label(target)
+        except PeriodParseError:
+            # Shape looked like a label but doesn't parse (e.g. month 13) —
+            # not something we can resolve; leave it and don't warn.
+            return m.group(0)
+
+        stem = period_to_stem.get(canon)
+        if stem is None:
+            unresolved.append(target)
+            return m.group(0)
+
+        # Already pointing at the right file (target was the stem's period
+        # portion and happens to equal it) — the stem differs from a bare
+        # label, so this only no-ops when nothing needs changing.
+        if stem == target:
+            return m.group(0)
+
+        fixed += 1
+        if alias:
+            return f"[[{stem}|{alias}]]"
+        return f"[[{stem}]]"
+
+    result = _WIKILINK_RE.sub(_replace, text)
+
+    if unresolved:
+        print(f"  ⚠  {len(unresolved)} unresolved period link(s) (no such entry):")
+        for u in unresolved:
+            print(f"      [[{u}]]")
+    if fixed:
+        print(f"  ✓  Fixed {fixed} period link(s) → entry slugs")
 
     return result
