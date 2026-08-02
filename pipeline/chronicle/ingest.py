@@ -82,6 +82,21 @@ def _message_uuids(conv: dict[str, Any]) -> list[str]:
     return [m["uuid"] for m in (conv.get("messages") or []) if m.get("uuid")]
 
 
+def _is_empty_conversation(conv: dict[str, Any]) -> bool:
+    """True if a conversation has no substantive content — a blank chat that
+    got a UUID and an auto-title but no actual message text.
+
+    claude.ai occasionally records a conversation with an empty `messages`
+    array (a new chat opened and abandoned). Tracking it is pure noise: it
+    can't be summarized (0 words), so the summarizer emits a placeholder and
+    re-summaries stack junk stat-lines. We test prose words, not just the
+    message count, so a conversation whose messages carry no text also counts.
+    """
+    if not (conv.get("messages") or []):
+        return True
+    return measure_text(conversation_prose(conv))["words"] == 0
+
+
 def _extract_branches(
     uuid: str, old_path: Path, new_conv: dict[str, Any]
 ) -> dict[str, Any] | None:
@@ -199,6 +214,18 @@ def ingest_export(export_path: Path, state: dict[str, Any]) -> dict[str, list[st
         uuid = conv.get("uuid")
         if not uuid:
             continue
+
+        # Skip genuinely empty conversations (blank chats with no message
+        # content). Never track a new one; tombstone one we already tracked
+        # (e.g. its content was removed). This runs before any file write, so
+        # an empty conversation still present in an export can't be resurrected
+        # by the un-tombstone branch below — it never reaches it.
+        if _is_empty_conversation(conv):
+            if state["conversations"].get(uuid):
+                if _soft_delete(uuid, state):
+                    deleted.append(uuid)
+            continue
+
         existing = state["conversations"].get(uuid)
         existing_rel = existing.get("conversation_file") if existing else None
         # Don't keep a tombstoned path if the conversation is being re-added.
