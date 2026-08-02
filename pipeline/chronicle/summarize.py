@@ -260,6 +260,156 @@ def _select_targets(state: dict[str, Any], args: Any) -> tuple[list[str], int, s
     return targets, len(alive), "all tracked conversations"
 
 
+class MalformedSummaryError(Exception):
+    """Raised when a model-produced summary can't be parsed as
+    frontmatter + body. Written with a fix hint so a failed run says how to
+    recover."""
+
+
+# Frontmatter keys the summarize prompt always asks the model to emit. If a
+# parse yields none of these, the block isn't real frontmatter — almost
+# always a missing closing `---` fence (see `_validate_summary_output`).
+_REQUIRED_FM_KEYS = ("title", "uuid")
+
+
+def _validate_summary_output(output: str) -> None:
+    """Reject a model summary whose frontmatter didn't parse, before it's
+    written to disk.
+
+    The frontmatter is produced by the model, not by the pipeline, so a
+    dropped closing `---` is a live failure mode. When that happens,
+    `split_frontmatter` finds no closing fence and returns ``({}, whole_text)``
+    — the body silently becomes "frontmatter" and a later `_inject_metrics`
+    reseals the whole blob into one `---` block (this is exactly how the
+    vasocomputation summary got malformed). Catch it here: if the output opens
+    with a `---` fence but parses to a frontmatter dict missing the required
+    keys, the fence never closed. Fail loudly with a recovery hint rather than
+    laundering the mess into a valid-looking file.
+    """
+    from .metrics import split_frontmatter
+
+    if not output.lstrip().startswith("---\n"):
+        raise MalformedSummaryError(
+            "Summary output has no opening `---` frontmatter fence.\n"
+            "  Cause: the model didn't emit frontmatter.\n"
+            "  Fix: re-run `chronicle summarize -u <uuid> -f` to regenerate."
+        )
+    fields, _ = split_frontmatter(output)
+    missing = [k for k in _REQUIRED_FM_KEYS if k not in fields]
+    if missing:
+        raise MalformedSummaryError(
+            "Summary frontmatter didn't parse — most likely a missing "
+            "closing `---` fence, so the body was swallowed into the header "
+            f"(no {', '.join(missing)} key found).\n"
+            "  Fix: re-run `chronicle summarize -u <uuid> -f` to regenerate. "
+            "The old file is left untouched; nothing malformed is written."
+        )
+
+
+def recover_malformed_summary(text: str) -> str | None:
+    """Reconstruct a summary whose body was sealed inside the frontmatter.
+
+    Reverses the specific corruption `_validate_summary_output` now blocks:
+    the frontmatter fence never closed, so a later re-serialize wrapped the
+    real body (opening `---` and all) into one big frontmatter block. Reads
+    that block line by line, keeps the genuine `key: value` frontmatter fields
+    up to the first prose line, and treats everything after as the body.
+
+    Returns the repaired text (well-formed `---` block + body), or ``None`` if
+    `text` doesn't look corrupted this way (so callers can skip healthy files).
+    The `original_words`/`summary_words`/`compression_ratio` values are dropped
+    — the caller recomputes them from the recovered body via the normal
+    metrics pass, which is the only trustworthy source.
+    """
+    from .metrics import render_with_frontmatter, split_frontmatter
+
+    if not text.lstrip().startswith("---\n"):
+        return None
+    inner = text.lstrip()[4:].split("\n")
+    # Find the closing fence of the frontmatter block. Everything above it was
+    # parsed as frontmatter; if the body was swallowed, real prose lives here.
+    close_idx = next(
+        (i for i, l in enumerate(inner) if l.strip() == "---"), None
+    )
+    if close_idx is None:
+        return None
+    block = inner[:close_idx]
+
+    # Corruption signature, kept deliberately narrow to avoid touching healthy
+    # files: a summary body paragraph — a `**Bold heading.**` line — appears
+    # inside the frontmatter block. Real frontmatter never contains one. A long
+    # or multi-line *field value* (e.g. a `keywords:` sentence that wrapped) is
+    # NOT this — it doesn't start a line with `**`. This is the reliable tell
+    # that the closing fence was dropped and the body got swallowed.
+    def _is_body_line(line: str) -> bool:
+        return line.lstrip().startswith("**")
+
+    if not any(_is_body_line(l) for l in block):
+        return None  # no swallowed body — leave it alone
+
+    _METRICS_KEYS = ("original_words", "summary_words", "compression_ratio")
+
+    # The body starts at the first `**`-heading line. Everything before it is
+    # genuine frontmatter (fields, and any wrapped field-value continuation
+    # lines, which we keep attached to their field by not splitting on them).
+    split_at = next(i for i, l in enumerate(block) if _is_body_line(l))
+
+    clean_fields: dict[str, Any] = {}
+    for line in block[:split_at]:
+        if ":" not in line:
+            continue
+        k, _, v = line.partition(":")
+        k = k.strip()
+        # Drop the metrics fields — recomputed downstream from the real body.
+        if k in _METRICS_KEYS:
+            continue
+        clean_fields[k] = v.strip()
+
+    # Body is everything after the fields, minus any stray metrics lines that
+    # got appended when the corruption was resealed (they sit at the tail of
+    # the swallowed region, not in the prose).
+    body_lines = [
+        l for l in block[split_at:]
+        if not (":" in l and l.split(":", 1)[0].strip() in _METRICS_KEYS)
+    ]
+    recovered_body = "\n".join(body_lines).strip()
+    if not clean_fields or not recovered_body:
+        return None
+    return render_with_frontmatter(clean_fields, recovered_body)
+
+
+def repair_summaries(state: dict[str, Any], *, dry_run: bool = False) -> int:
+    """Scan every summary file and reconstruct any whose body was swallowed
+    into the frontmatter (the corruption `_validate_summary_output` now
+    blocks on write). Returns the number of files repaired.
+
+    Structure only: after recovery the metrics are stale, so the caller (or
+    `chronicle recompute-metrics`) recomputes `summary_words`/`compression_ratio`
+    from the recovered body. A healthy file is detected and skipped.
+    """
+    from .paths import data_root
+
+    repaired = 0
+    for uuid, c in state.get("conversations", {}).items():
+        rel = c.get("summary_file")
+        if not rel or c.get("deleted_at"):
+            continue
+        path = data_root() / rel
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
+        # recover_malformed_summary is the single arbiter: it returns None for
+        # a healthy file and the reconstruction for a corrupted one.
+        recovered = recover_malformed_summary(text)
+        if recovered is None:
+            continue
+        print(f"  {'would repair' if dry_run else '✓ repaired'}: {rel}")
+        if not dry_run:
+            path.write_text(recovered, encoding="utf-8")
+        repaired += 1
+    return repaired
+
+
 def summarize_one(
     uuid: str,
     state: dict[str, Any],
@@ -625,6 +775,13 @@ def summarize_one(
         import shutil
         shutil.rmtree(seg_cache_dir, ignore_errors=True)
 
+    # Guard: the frontmatter above was produced by the model, not the
+    # pipeline. Verify it parses before we touch disk — a dropped closing
+    # `---` would otherwise get laundered into a valid-looking file with the
+    # body sealed inside the header. Raising here leaves the old summary
+    # untouched and tells the caller to regenerate.
+    _validate_summary_output(output)
+
     # Write summary. Month derived from created_at so summaries mirror
     # conversations/ layout.
     month = (conv_meta.get("created_at") or "unknown")[:7]
@@ -800,10 +957,17 @@ def run(args: Any) -> None:
         # summarize_one mutates state["conversations"][uuid] — that's a
         # different key per task, so concurrent mutation is safe. The lock
         # only guards the save.
-        ok = summarize_one(
-            uuid, state, pending_context=pending_context,
-            model=model, effort=effort,
-        )
+        try:
+            ok = summarize_one(
+                uuid, state, pending_context=pending_context,
+                model=model, effort=effort,
+            )
+        except MalformedSummaryError as e:
+            # Bad generation (e.g. dropped closing `---`). Nothing was
+            # written; report and count as a failure so the batch continues.
+            print(f"  ✗ {uuid[:8]} — malformed summary, not written:\n    {e}",
+                  flush=True)
+            return False
         if ok:
             with state_lock:
                 state_mod.save(state)

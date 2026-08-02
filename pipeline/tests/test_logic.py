@@ -396,5 +396,71 @@ class FrontmatterSplit(unittest.TestCase):
         self.assertEqual(parse_frontmatter(doc), split_frontmatter(doc)[0])
 
 
+class MalformedSummaryGuard(unittest.TestCase):
+    """The summary frontmatter is model-produced; a dropped closing `---`
+    swallows the body into the header. The write guard must reject that, and
+    the recovery function must reverse it — without touching healthy files."""
+
+    def setUp(self):
+        from chronicle.summarize import (
+            _validate_summary_output, recover_malformed_summary,
+            MalformedSummaryError,
+        )
+        self.validate = _validate_summary_output
+        self.recover = recover_malformed_summary
+        self.Err = MalformedSummaryError
+
+    # --- guard ---
+    def test_guard_rejects_dropped_closing_fence(self):
+        bad = "---\ntitle: X\nuuid: y\nBody glued straight on with no fence.\n"
+        with self.assertRaises(self.Err):
+            self.validate(bad)
+
+    def test_guard_rejects_no_frontmatter(self):
+        with self.assertRaises(self.Err):
+            self.validate("just some prose, no frontmatter at all\n")
+
+    def test_guard_accepts_healthy(self):
+        good = ("---\ntitle: X\nuuid: y\nsignificance: high\n---\n\n"
+                "**Heading.** Body.\n\n---\n\n## Full conversation\n")
+        self.validate(good)  # must not raise
+
+    def test_guard_accepts_colon_heavy_keywords_value(self):
+        # A long/multi-line keywords value is a legit field, not corruption.
+        good = ("---\ntitle: X\nuuid: y\nkeywords: a, b: c, d\n"
+                "significance: medium\n---\n\nBody here.\n")
+        self.validate(good)  # must not raise
+
+    # --- recovery ---
+    def test_recover_reconstructs_swallowed_body(self):
+        corrupt = (
+            "---\ntitle: Vaso\nuuid: 663141b8\nkeywords: a, b: c\n"
+            "significance: high\n"
+            "**What it is.** Prose: with a colon.\n"
+            "**Physiology.** More words no colon.\n"
+            "original_words: 50267\nsummary_words: 18\n"
+            "compression_ratio: 0.0007\n---\n\n## Full conversation\n"
+        )
+        rec = self.recover(corrupt)
+        self.assertIsNotNone(rec)
+        fm, body = split_frontmatter(rec)
+        # Real fields kept, in order; colon-heavy keywords value preserved.
+        self.assertEqual(
+            list(fm.keys()), ["title", "uuid", "keywords", "significance"])
+        self.assertEqual(fm["keywords"], "a, b: c")
+        # Body moved out; stale metrics dropped (recomputed downstream).
+        self.assertTrue(body.startswith("**What it is."))
+        self.assertNotIn("original_words", body)
+        self.assertNotIn("summary_words", body)
+
+    def test_recover_returns_none_on_healthy(self):
+        good = ("---\ntitle: X\nuuid: y\nkeywords: a, b: c, d\n"
+                "significance: medium\n---\n\nBody here.\n")
+        self.assertIsNone(self.recover(good))
+
+    def test_recover_returns_none_without_frontmatter(self):
+        self.assertIsNone(self.recover("no frontmatter here\n"))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -87,6 +87,20 @@ def _synthesize_cmd(args: argparse.Namespace) -> None:
     synthesize.run(args)
 
 
+def _repair_summaries_cmd(args: argparse.Namespace) -> None:
+    from . import summarize, state as state_mod
+    st = state_mod.load()
+    n = summarize.repair_summaries(st, dry_run=getattr(args, "dry_run", False))
+    if n == 0:
+        print("No malformed summaries found.")
+    elif args.dry_run:
+        print(f"{n} file(s) would be repaired. "
+              "Run without --dry-run, then `chronicle recompute-metrics`.")
+    else:
+        print(f"Repaired {n} file(s). "
+              "Now run `chronicle recompute-metrics` to refresh the numbers.")
+
+
 def _install_agent_cmd(args: argparse.Namespace) -> None:
     from .agent import install
     install()
@@ -235,6 +249,16 @@ def build_parser() -> argparse.ArgumentParser:
         "synthesize runs this for its children automatically.",
     )
     p_rcm.set_defaults(func=lambda a: __import__("chronicle.recompute_metrics", fromlist=["run"]).run(a))
+
+    p_rep = sub.add_parser(
+        "repair-summaries", aliases=["rep"],
+        help="Reconstruct any summary whose body got swallowed into its "
+        "frontmatter (malformed model output). Structure only, no Claude "
+        "call — run recompute-metrics after to refresh the numbers.",
+    )
+    p_rep.add_argument("-n", "--dry-run", action="store_true",
+                       help="List files that would be repaired without writing.")
+    p_rep.set_defaults(func=_repair_summaries_cmd)
 
     p_bfl = sub.add_parser(
         "backfill-links", aliases=["bfl"],
