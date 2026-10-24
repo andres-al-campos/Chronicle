@@ -7,11 +7,14 @@ import sys
 from pathlib import Path
 
 MODEL_ALIASES: dict[str, str] = {
+    "opus": "claude-opus-5-5",
     "opus5": "claude-opus-5",
-    "opus": "claude-opus-4-8",
     "sonnet": "claude-sonnet-4-6",
     "haiku": "claude-haiku-4-5-20251001",
 }
+
+# The summarize/synthesize default: the latest Opus, named once here.
+DEFAULT_MODEL = "opus"
 
 # Shared effort choices for the summarize/synthesize -e flag.
 EFFORT_CHOICES = ["low", "medium", "high", "max"]
@@ -64,7 +67,7 @@ def _sync_cmd(args: argparse.Namespace) -> None:
         force=False,
         dry_run=getattr(args, "dry_run", False),
         workers=getattr(args, "workers", 1),
-        model=resolve_model(getattr(args, "model", "opus5")),
+        model=resolve_model(getattr(args, "model", DEFAULT_MODEL)),
         effort=getattr(args, "effort", "low"),
     )
     summarize.run(sum_args)
@@ -131,7 +134,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_sync.add_argument("-i", "--ingest-only", action="store_true", help="Stop after ingest — no summarize, no Claude, no spend (the old default).")
     p_sync.add_argument("-n", "--dry-run", action="store_true", help="Ingest, then list the conversations that would be summarized without calling Claude.")
     p_sync.add_argument("-w", "--workers", type=int, default=1, help="Parallel claude invocations for the summarize pass (default 1; try 4 for bulk).")
-    p_sync.add_argument("-m", "--model", default="opus5", help="Model alias (opus5, opus, sonnet, haiku) or full ID for the summarize pass. Default: opus5.")
+    p_sync.add_argument("-m", "--model", default=DEFAULT_MODEL, help="Model alias (opus, opus5, sonnet, haiku) or full ID for the summarize pass. Default: opus, the latest Opus.")
     p_sync.add_argument("-e", "--effort", default="low", choices=EFFORT_CHOICES, help="Extended thinking effort level for the summarize pass (default: low).")
     p_sync.set_defaults(func=_sync_cmd)
 
@@ -147,7 +150,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_sum.add_argument("-f", "--force", action="store_true", help="Force re-summarize even if already fresh. Deletes existing summary file(s) first.")
     p_sum.add_argument("-n", "--dry-run", action="store_true", help="List the conversations that would be summarized, in order, without calling Claude.")
     p_sum.add_argument("-w", "--workers", type=int, default=1, help="Parallel claude invocations (default 1; try 4 for bulk runs). Watch for API rate limits.")
-    p_sum.add_argument("-m", "--model", default="opus5", help="Model alias (opus5, opus, sonnet, haiku) or full ID. Resolved to exact ID for provenance. Default: opus5.")
+    p_sum.add_argument("-m", "--model", default=DEFAULT_MODEL, help="Model alias (opus, opus5, sonnet, haiku) or full ID. Resolved to exact ID for provenance. Default: opus, the latest Opus.")
     p_sum.add_argument("-e", "--effort", default="low", choices=EFFORT_CHOICES, help="Extended thinking effort level (default: low).")
     p_sum.set_defaults(func=_summarize_cmd)
 
@@ -169,7 +172,7 @@ def build_parser() -> argparse.ArgumentParser:
         "-n", "--dry-run", action="store_true",
         help="With no --period: list the periods that would be synthesized, in order, without running Claude.",
     )
-    p_syn.add_argument("-m", "--model", default="opus5", help="Model alias (opus5, opus, sonnet, haiku) or full ID. Resolved to exact ID for provenance. Default: opus5.")
+    p_syn.add_argument("-m", "--model", default=DEFAULT_MODEL, help="Model alias (opus, opus5, sonnet, haiku) or full ID. Resolved to exact ID for provenance. Default: opus, the latest Opus.")
     p_syn.add_argument("-e", "--effort", default="low", choices=EFFORT_CHOICES, help="Extended thinking effort level (default: low).")
     p_syn.add_argument("-y", "--yes", action="store_true", help="Skip confirmation prompts (period not yet ended, stale summaries).")
     p_syn.set_defaults(func=_synthesize_cmd)
@@ -293,7 +296,7 @@ def main(argv: list[str] | None = None) -> int:
         args.ingest_only = False
         args.dry_run = False
         args.workers = 1
-        args.model = "opus5"
+        args.model = DEFAULT_MODEL
         args.effort = "low"
         args.func = _sync_cmd
     try:
