@@ -275,7 +275,12 @@ function ensureContentScript() {
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage({ action: 'ensureContentScript' }, (res) => {
       if (chrome.runtime.lastError) return reject(chrome.runtime.lastError);
-      if (!res || !res.success) return reject(new Error(res && res.error ? res.error : 'Could not reach claude.ai tab.'));
+      if (!res || !res.success) {
+        // The background's messages already say how to fix the problem.
+        const err = new Error(res && res.error ? res.error : 'Could not reach claude.ai tab.');
+        err.hasFix = !!(res && res.error);
+        return reject(err);
+      }
       resolve(res.tabId);
     });
   });
@@ -328,7 +333,7 @@ async function startFetch() {
     setStatusText('Fetch started…');
   } catch (err) {
     els.fetchBtn.disabled = false;
-    setStatusText(`Could not start: ${err.message}. Open claude.ai and try again.`);
+    setStatusText(err.hasFix ? err.message : `Could not start: ${err.message}. Open claude.ai and try again.`);
   }
 }
 

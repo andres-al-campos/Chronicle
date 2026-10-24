@@ -38,7 +38,7 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "chronicle-export@local",
-      "strict_min_version": "121.0"
+      "strict_min_version": "127.0"
     }
   }
 }
