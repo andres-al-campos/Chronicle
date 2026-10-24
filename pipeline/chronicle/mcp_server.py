@@ -111,6 +111,11 @@ def chronicle_find(
     - Then call chronicle_read on the top hit(s) to read the full summary
       and answer the question.
     - Quote specific passages from summaries, don't paraphrase loosely.
+    - For a question about a span of time (how something changed over a
+      year or quarter, what a period was about), read that period's entry
+      first (chronicle_entries, then chronicle_read): it already traces the
+      arc across conversations. Then read the summaries it names for exact
+      quotes and dates.
 
     SEARCH TIPS:
     - Use 1–3 specific terms. "Michael Levin" beats "biology". Rare terms
