@@ -9,7 +9,7 @@ if (window.__chronicleExportLoaded) {
 } else {
   window.__chronicleExportLoaded = true;
 
-  const EXTENSION_VERSION = '0.1.0';
+  const EXTENSION_VERSION = chrome.runtime.getManifest().version;
   const FETCH_DELAY_MS = 500;
   const BACKOFF_SCHEDULE_MS = [1000, 2000, 4000];
   const MAX_RETRIES = BACKOFF_SCHEDULE_MS.length;
