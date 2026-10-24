@@ -39,6 +39,11 @@
     * { box-sizing: border-box; }
     body {
       width: 500px;
+      /* Browsers cap a popup at 600px tall. Held to that as a column, the list
+         takes what's left, so only the list and the log scroll, never the popup. */
+      max-height: 600px;
+      display: flex;
+      flex-direction: column;
       margin: 0;
       padding: 0;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -56,7 +61,14 @@
     }
     header .title { font-weight: 600; letter-spacing: 0.2px; }
     header .version { font-size: 11px; opacity: 0.8; }
-    main { padding: 10px 14px; }
+    main {
+      padding: 10px 14px;
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    main > * { flex-shrink: 0; }
 
     /* ── Setup panel ── */
     .last-download {
@@ -235,7 +247,12 @@
 
     /* ── Conversation list ── */
     #listPanel { display: none; margin-top: 10px; }
-    #listPanel.active { display: block; }
+    #listPanel.active {
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 1;
+      min-height: 0;
+    }
     .list-toolbar {
       display: flex;
       gap: 6px;
@@ -257,6 +274,7 @@
 
     .conv-list {
       max-height: 300px;
+      min-height: 0;
       overflow-y: auto;
       border: 1px solid var(--border);
       border-radius: 4px;
