@@ -6,11 +6,11 @@ import argparse
 import sys
 from pathlib import Path
 
+# opus, sonnet and haiku go to the CLI as they are: it resolves each to the
+# latest of its family. The exact model that ran is read back from the CLI's
+# JSON output and recorded, so provenance doesn't need a pinned ID here.
 MODEL_ALIASES: dict[str, str] = {
-    "opus": "claude-opus-5-5",
     "opus5": "claude-opus-5",
-    "sonnet": "claude-sonnet-4-6",
-    "haiku": "claude-haiku-4-5-20251001",
 }
 
 # The summarize/synthesize default: the latest Opus, named once here.
@@ -150,7 +150,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_sum.add_argument("-f", "--force", action="store_true", help="Force re-summarize even if already fresh. Deletes existing summary file(s) first.")
     p_sum.add_argument("-n", "--dry-run", action="store_true", help="List the conversations that would be summarized, in order, without calling Claude.")
     p_sum.add_argument("-w", "--workers", type=int, default=1, help="Parallel claude invocations (default 1; try 4 for bulk runs). Watch for API rate limits.")
-    p_sum.add_argument("-m", "--model", default=DEFAULT_MODEL, help="Model alias (opus, opus5, sonnet, haiku) or full ID. Resolved to exact ID for provenance. Default: opus, the latest Opus.")
+    p_sum.add_argument("-m", "--model", default=DEFAULT_MODEL, help="Model alias (opus, opus5, sonnet, haiku) or full ID. The exact model that ran is recorded. Default: opus, the latest Opus.")
     p_sum.add_argument("-e", "--effort", default="low", choices=EFFORT_CHOICES, help="Extended thinking effort level (default: low).")
     p_sum.set_defaults(func=_summarize_cmd)
 
@@ -172,7 +172,7 @@ def build_parser() -> argparse.ArgumentParser:
         "-n", "--dry-run", action="store_true",
         help="With no --period: list the periods that would be synthesized, in order, without running Claude.",
     )
-    p_syn.add_argument("-m", "--model", default=DEFAULT_MODEL, help="Model alias (opus, opus5, sonnet, haiku) or full ID. Resolved to exact ID for provenance. Default: opus, the latest Opus.")
+    p_syn.add_argument("-m", "--model", default=DEFAULT_MODEL, help="Model alias (opus, opus5, sonnet, haiku) or full ID. The exact model that ran is recorded. Default: opus, the latest Opus.")
     p_syn.add_argument("-e", "--effort", default="low", choices=EFFORT_CHOICES, help="Extended thinking effort level (default: low).")
     p_syn.add_argument("-y", "--yes", action="store_true", help="Skip confirmation prompts (period not yet ended, stale summaries).")
     p_syn.set_defaults(func=_synthesize_cmd)

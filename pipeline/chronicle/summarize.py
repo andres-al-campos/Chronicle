@@ -27,6 +27,7 @@ from . import state as state_mod
 from .claude_invoke import (
     ClaudeInvocationError,
     ClaudeNotFoundError,
+    ask_claude,
     run_claude,
 )
 from .metrics import compression_ratio, measure_text
@@ -494,6 +495,9 @@ def summarize_one(
     # branches instead of re-processing the entire conversation.
     created_at = conv_meta.get("created_at") or ""
     branches = _load_branches(uuid, created_at)
+    # The exact model that answered, from the CLI's reply (None until a call
+    # reports it, e.g. when every segment came from the cache).
+    ran_model: str | None = None
     old_summary_path = (
         (data_root() / conv_meta["summary_file"])
         if conv_meta.get("summary_file")
@@ -593,7 +597,7 @@ def summarize_one(
             f"{branch_instructions}"
         )
         try:
-            output = run_claude(
+            reply = ask_claude(
                 _instruction_file(),
                 input_text,
                 model=model,
@@ -602,6 +606,7 @@ def summarize_one(
         except ClaudeInvocationError as e:
             print(f"  ✗ {uuid[:8]} — claude error (incremental): {e}", flush=True)
             return False
+        output, ran_model = reply.text, reply.model
         _delete_branches(uuid, created_at)
     elif not needs_chunking(conv_text, significance=significance):
         # Normal path: single call, full conversation.
@@ -613,7 +618,7 @@ def summarize_one(
             f"# Conversation JSON\n\n{conv_text}\n"
         )
         try:
-            output = run_claude(
+            reply = ask_claude(
                 _instruction_file(),
                 input_text,
                 model=model,
@@ -622,6 +627,7 @@ def summarize_one(
         except ClaudeInvocationError as e:
             print(f"  ✗ {uuid[:8]} — claude error: {e}", flush=True)
             return False
+        output, ran_model = reply.text, reply.model
     else:
         # Sliding window: chunk the conversation, summarize each chunk
         # sequentially. Each segment after the first receives the previous
@@ -706,7 +712,7 @@ def summarize_one(
                 f"# Conversation JSON (segment {i}/{n_chunks})\n\n{chunk}\n"
             )
             try:
-                seg = run_claude(
+                seg_reply = ask_claude(
                     _instruction_file(),
                     input_text,
                     model=model,
@@ -716,7 +722,8 @@ def summarize_one(
                 print(f"  ✗ {uuid[:8]} — claude error on segment {i}/{n_chunks}: {e}", flush=True)
                 print(f"    ({i - 1} segment(s) cached — re-run to resume)", flush=True)
                 return False
-            seg_text = seg.strip()
+            ran_model = seg_reply.model or ran_model
+            seg_text = seg_reply.text.strip()
             segment_summaries.append(seg_text)
             seg_file.write_text(seg_text, encoding="utf-8")
             print(f"    segment {i}/{n_chunks} done ({len(seg_text.split()):,} words)", flush=True)
@@ -809,7 +816,7 @@ def summarize_one(
     from .metrics import split_frontmatter
     summary_metrics = measure_text(split_frontmatter(output)[1])
     ratio = compression_ratio(summary_metrics["chars"], orig_chars)
-    used_model = model or "sonnet"
+    used_model = ran_model or model or "sonnet"
     output = _inject_metrics(output, orig_words, summary_metrics, ratio, used_model, identity={
         "uuid": uuid,
         "title": conv_meta.get("title"),

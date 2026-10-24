@@ -36,7 +36,7 @@ from .calendar import (
     children_for,
     parse_period,
 )
-from .claude_invoke import ClaudeInvocationError, run_claude
+from .claude_invoke import ClaudeInvocationError, ask_claude
 from .metrics import entry_body, measure_text, parse_frontmatter
 from .paths import (
     data_root,
@@ -883,7 +883,7 @@ def _run_one(args: Any) -> None:
     effort = getattr(args, "effort", None) or "low"
     print(f"  Model: {model} · effort: {effort} (extended thinking)")
     try:
-        output = run_claude(
+        reply = ask_claude(
             _instruction_file(), input_text,
             model=model,
             effort=effort,
@@ -891,6 +891,9 @@ def _run_one(args: Any) -> None:
     except ClaudeInvocationError as e:
         print(f"claude error: {e}")
         raise SystemExit(1)
+    output = reply.text
+    # Record the model that answered, not the alias that was asked for.
+    model = reply.model or model
 
     # Extract the headline directive from the first line.
     headline = _extract_headline(output)

@@ -10,9 +10,11 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -50,7 +52,46 @@ _AUTH_HELP = (
 )
 
 
-def run_claude(
+@dataclass
+class Reply:
+    text: str
+    # The exact model ID that answered, read from the CLI's JSON output, so an
+    # alias like "opus" is recorded as the model it resolved to that day.
+    # None when the output carried no usage (an old CLI).
+    model: str | None
+
+
+def _parse_reply(stdout: str) -> Reply:
+    """Read `claude -p --output-format json` output. Raises on an error result."""
+    try:
+        data = json.loads(stdout)
+    except json.JSONDecodeError:
+        # Not JSON: an old CLI that ignores --output-format. Take it as text.
+        return Reply(stdout, None)
+    if data.get("is_error") or data.get("subtype") not in (None, "success"):
+        raise ClaudeInvocationError(
+            f"claude returned an error ({data.get('subtype') or 'is_error'}): "
+            f"{(data.get('result') or '').strip()[:500]}\n"
+            "Fix: check the message above (budget, login, or model name), "
+            "then re-run."
+        )
+    usage = data.get("modelUsage") or {}
+    # The answering model does the most output; a side call (a title, a
+    # classifier) would use another model for a few tokens.
+    model = max(
+        usage,
+        key=lambda m: (usage[m] or {}).get("outputTokens", 0),
+        default=None,
+    )
+    return Reply(data.get("result") or "", model)
+
+
+def run_claude(instruction_path: Path, input_text: str, **kwargs) -> str:
+    """ask_claude, for callers that only want the text."""
+    return ask_claude(instruction_path, input_text, **kwargs).text
+
+
+def ask_claude(
     instruction_path: Path,
     input_text: str,
     *,
@@ -60,11 +101,11 @@ def run_claude(
     effort: str | None = None,
     max_retries: int = 3,
     retry_wait: int = 30,
-) -> str:
+) -> Reply:
     """Run `claude -p` with the instruction file prepended to input_text.
 
-    Returns Claude's stdout (the model's response). Raises on non-zero exit or
-    missing binary. No file writes happen here — caller writes the output.
+    Returns the model's response and the exact model that wrote it. Raises on
+    non-zero exit, an error result, or a missing binary. No file writes happen here — caller writes the output.
 
     On rate-limit errors, retries up to max_retries times with retry_wait
     seconds between attempts.
@@ -92,6 +133,9 @@ def run_claude(
         # safety — only contamination.
         "--permission-mode",
         "default",
+        # JSON carries the exact model that ran alongside the text.
+        "--output-format",
+        "json",
     ]
     if max_budget_usd is not None:
         cmd.extend(["--max-budget-usd", str(max_budget_usd)])
@@ -120,7 +164,7 @@ def run_claude(
             ) from e
 
         if result.returncode == 0:
-            return result.stdout
+            return _parse_reply(result.stdout)
 
         # Auth failures won't self-heal — surface the fix immediately, no retry
         # and no raw API-error dump.
