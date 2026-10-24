@@ -5,6 +5,8 @@
   <title>Chronicle Export</title>
   <style>
     :root {
+      /* Scrollbars and date pickers follow the theme too. */
+      color-scheme: light dark;
       --bg: #1e1e1e;
       --fg: #e0e0e0;
       --muted: #9a9a9a;
@@ -275,7 +277,8 @@
       cursor: pointer;
     }
     .conv-row .conv-date {
-      flex: 0 0 64px;
+      flex: 0 0 auto;
+      white-space: nowrap;
       color: var(--muted);
       font-size: 11px;
       font-variant-numeric: tabular-nums;
