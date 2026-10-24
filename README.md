@@ -1,5 +1,7 @@
 # Chronicle
 
+Updated 2026-10-23 19:23, at 0.4.0.
+
 A personal encyclopedia of your Claude.ai conversations — captured, summarized, and
 made searchable from your own machine.
 
@@ -17,9 +19,9 @@ summarization passes you explicitly run.
 
 Chronicle is three pieces that hand off to each other:
 
-1. **The browser extension** (`extension/`) — a Firefox extension that exports your
-   Claude.ai conversation history (all of it, or a date-bounded slice) as a single
-   JSON file.
+1. **The browser extension** (`extension/`) — a Chrome and Firefox extension that
+   exports your Claude.ai conversation history (all of it, or a date-bounded slice)
+   as a single JSON file.
 2. **The pipeline** (`pipeline/`) — a Python CLI that ingests those exports, splits
    them into per-conversation files, tracks freshness from timestamps, and
    orchestrates Claude to write the summaries and period entries.
@@ -39,9 +41,22 @@ Claude.ai  ──(extension)──▶  export.json  ──(pipeline)──▶  s
 ./build.sh            # lints + builds the extension into artifacts/ (needs Node 20+)
 ```
 
-Then load it in Firefox via `about:debugging` → **This Firefox** → **Load Temporary
-Add-on** → pick the built zip in `artifacts/` (or `extension/manifest.json` for a
-live-reload dev copy). Use its popup on `claude.ai` to export your history.
+One build runs in both browsers.
+
+- **Chrome**: open `chrome://extensions`, turn on **Developer mode**, click **Load
+  unpacked** and pick `artifacts/chrome/`. After a rebuild, click the reload arrow
+  on the extension's card. From a release, unzip `chronicle_export-<version>-chrome.zip`
+  and load that folder the same way.
+- **Firefox** (127 or later): open `about:debugging` → **This Firefox** → **Load
+  Temporary Add-on** and pick `artifacts/chronicle_export-<version>.zip` (or
+  `extension/manifest.json` for a live-reload dev copy). Temporary add-ons are
+  removed when Firefox quits.
+
+Open `claude.ai`, sign in, and use the extension's toolbar popup to export your
+history. It needs access to claude.ai, which both browsers grant at install. If you
+turn it off later, Fetch says where to turn it back on: in Firefox, `about:addons` →
+Chronicle Export → **Permissions**; in Chrome, the extension's **Details** →
+**Site access**.
 
 ### 2. Set up the pipeline
 
@@ -90,10 +105,11 @@ is the only thing that writes files. Details in
 ## Layout
 
 ```
-extension/    Firefox extension — captures Claude.ai exports
+extension/    Chrome and Firefox extension — captures Claude.ai exports
 pipeline/     Python CLI — ingest, summarize, synthesize, search, MCP server
 files/        Summarization/synthesis prompts and the original design specs
-build.sh      Builds the extension
+features/     What a user can do, and the check for each
+build.sh      Builds the extension; `check` runs the laws and drives
 ```
 
 Processed data (your summaries, the search index, raw exports) lives outside version
