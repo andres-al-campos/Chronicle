@@ -20,6 +20,7 @@ if [ -z "$VERSION" ]; then
 fi
 TAG="v$VERSION"
 ARTIFACT="artifacts/chronicle_export-${VERSION}.zip"
+CHROME_ARTIFACT="artifacts/chronicle_export-${VERSION}-chrome.zip"
 
 # --- Refuse a dirty tree ---
 if [ -n "$(git status --porcelain)" ]; then
@@ -46,16 +47,18 @@ fi
 # --- Build fresh ---
 echo "🏗  Building $TAG..."
 ./build.sh
-if [ ! -f "$ARTIFACT" ]; then
-  echo "Build did not produce $ARTIFACT."
-  echo "Fix: run ./build.sh and confirm the artifact name matches the manifest version, then retry."
-  exit 1
-fi
+for f in "$ARTIFACT" "$CHROME_ARTIFACT"; do
+  if [ ! -f "$f" ]; then
+    echo "Build did not produce $f."
+    echo "Fix: run ./build.sh and confirm the artifact names match the manifest version, then retry."
+    exit 1
+  fi
+done
 
 # --- Publish ---
 echo "🚀 Creating GitHub release $TAG..."
-gh release create "$TAG" "$ARTIFACT" \
+gh release create "$TAG" "$ARTIFACT" "$CHROME_ARTIFACT" \
   --title "Chronicle Export $VERSION" \
   --generate-notes
 
-echo "✅ Released $TAG with $ARTIFACT"
+echo "✅ Released $TAG with $ARTIFACT and $CHROME_ARTIFACT"
