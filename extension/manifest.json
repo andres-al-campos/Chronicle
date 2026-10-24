@@ -1,15 +1,18 @@
 {
-  "manifest_version": 2,
+  "manifest_version": 3,
   "name": "Chronicle Export",
   "version": "0.3.0",
   "description": "Export Claude.ai conversations for the Chronicle pipeline.",
   "permissions": [
     "activeTab",
+    "scripting",
     "storage",
-    "tabs",
+    "tabs"
+  ],
+  "host_permissions": [
     "https://claude.ai/*"
   ],
-  "browser_action": {
+  "action": {
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icon16.png",
@@ -29,13 +32,13 @@
     }
   ],
   "background": {
-    "scripts": ["background.js"],
-    "persistent": true
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
   },
   "browser_specific_settings": {
     "gecko": {
       "id": "chronicle-export@local",
-      "strict_min_version": "109.0"
+      "strict_min_version": "121.0"
     }
   }
 }

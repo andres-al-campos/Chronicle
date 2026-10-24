@@ -1,12 +1,17 @@
 // Chronicle Export — background script.
 // Thin relay. Re-injects the content script into open claude.ai tabs on
 // install/update so the popup can talk to it immediately after a reload.
+// Holds no state, so it runs as a Chrome service worker or a Firefox event page.
+
+function injectContentScript(tabId, callback) {
+  chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] }, callback);
+}
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[Chronicle] background installed');
   chrome.tabs.query({ url: 'https://claude.ai/*' }, (tabs) => {
     tabs.forEach((tab) => {
-      chrome.tabs.executeScript(tab.id, { file: 'content.js' }, () => {
+      injectContentScript(tab.id, () => {
         if (chrome.runtime.lastError) {
           console.log('[Chronicle] could not inject into tab', tab.id, chrome.runtime.lastError.message);
         }
@@ -32,7 +37,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           return;
         }
         const target = claudeTabs[0];
-        chrome.tabs.executeScript(target.id, { file: 'content.js' }, () => {
+        injectContentScript(target.id, () => {
           if (chrome.runtime.lastError) {
             sendResponse({ success: false, error: chrome.runtime.lastError.message });
           } else {
@@ -42,7 +47,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       });
       return;
     }
-    chrome.tabs.executeScript(tab.id, { file: 'content.js' }, () => {
+    injectContentScript(tab.id, () => {
       if (chrome.runtime.lastError) {
         sendResponse({ success: false, error: chrome.runtime.lastError.message });
       } else {
