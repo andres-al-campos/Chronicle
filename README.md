@@ -1,7 +1,5 @@
 # Chronicle
 
-Updated 2026-10-24 20:55, at 0.4.0.
-
 A personal encyclopedia of your Claude.ai conversations — captured, summarized, and
 made searchable from your own machine.
 
