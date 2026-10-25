@@ -1,6 +1,6 @@
 # Chronicle
 
-Updated 2026-10-23 19:23, at 0.4.0.
+Updated 2026-10-24 20:55, at 0.4.0.
 
 A personal encyclopedia of your Claude.ai conversations — captured, summarized, and
 made searchable from your own machine.
@@ -11,6 +11,8 @@ those summaries roll up into period entries (half-month → quarter → year). T
 corpus is searchable, and an MCP server lets Claude itself read back through it — to
 recall what you decided, quote what you actually said, or revisit old threads with
 fresh eyes.
+
+![Chronicle on sample data: export the year's chats, summarize each, roll them up, then ask Claude about the year](docs/demo.webp)
 
 Everything runs locally. Your conversations never leave your machine except for the
 summarization passes you explicitly run.
