@@ -1,6 +1,6 @@
 # Export
 
-Updated 2026-10-23 19:23, at 0.4.0.
+Updated 2026-10-25 11:39, at 0.4.0.
 
 The browser extension saves your claude.ai conversations to a JSON file the
 pipeline ingests. The same build runs in Chrome and Firefox.

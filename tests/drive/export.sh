@@ -1,16 +1,16 @@
 #!/bin/bash
 # Feature check: the popup reaches a claude.ai tab in Chrome and Firefox
-# (features/export.md). Builds, then drives Playwright's Chromium and the
+# (dev/features/export.md). Builds, then drives Playwright's Chromium and the
 # installed Firefox against claude.ai's login page. Needs the network; no
 # sign-in. The full export needs a signed-in account, so it stays by hand.
 set -uo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 
 ./build.sh >/dev/null || { echo "✗ export: ./build.sh failed. Run it on its own to see why."; exit 1; }
 version=$(node -p "require('./extension/manifest.json').version")
 failed=0
 
-uv run -q --with playwright==1.58.0 python -I drive/export/chromium.py artifacts/chrome "$version" || failed=1
+uv run -q --with playwright==1.58.0 python -I tests/drive/export/chromium.py artifacts/chrome "$version" || failed=1
 
 FIREFOX=/Applications/Firefox.app
 if [ ! -d "$FIREFOX" ]; then
@@ -34,7 +34,7 @@ open -na "$FIREFOX" --args -headless -marionette -remote-allow-system-access -no
 for _ in $(seq 30); do nc -z 127.0.0.1 2828 2>/dev/null && break; sleep 0.5; done
 ffpid=$(pgrep -f -- "$profile" | head -1)
 
-uv run -q --with selenium python -I drive/export/firefox.py \
+uv run -q --with selenium python -I tests/drive/export/firefox.py \
     "artifacts/chronicle_export-$version.zip" "$version" "$uuid" || failed=1
 
 [ -n "$ffpid" ] && kill "$ffpid" 2>/dev/null

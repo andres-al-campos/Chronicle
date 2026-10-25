@@ -108,7 +108,7 @@ is the only thing that writes files. Details in
 extension/    Chrome and Firefox extension — captures Claude.ai exports
 pipeline/     Python CLI — ingest, summarize, synthesize, search, MCP server
 files/        Summarization/synthesis prompts and the original design specs
-features/     What a user can do, and the check for each
+dev/features/     What a user can do, and the check for each
 build.sh      Builds the extension; `check` runs the laws and drives
 ```
 
