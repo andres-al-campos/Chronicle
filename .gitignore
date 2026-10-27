@@ -14,3 +14,7 @@ build/
 .obsidian/
 .claude/settings.local.json
 .git/filter-repo/
+
+# Process, not product: mockups and per-quest plans stay on disk, off the remote
+designs/
+plans/
