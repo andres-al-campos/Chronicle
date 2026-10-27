@@ -2,7 +2,8 @@
 # build.sh - Build the Chronicle Export extension for Firefox and Chrome, or check it.
 #
 #   ./build.sh                 Lint and build into artifacts/ (needs Node 20+)
-#   ./build.sh check           Run every law in tests/, then every drive
+#   ./build.sh check           Run every law in tests/
+#   ./build.sh check --drives  The laws, then every drive in tests/drive/
 #   ./build.sh drive [name]    Run every feature check in tests/drive/, or the one named
 #
 # Uses the project-local web-ext pinned in extension/package.json, so the
@@ -44,11 +45,16 @@ drive() {
 case "${1:-}" in
   "") ;;
   check)
+    case "${2:-}" in
+      ""|--drives) ;;
+      *) echo "error: check takes only --drives. Use ./build.sh check, or ./build.sh check --drives to run the drives too."; exit 1 ;;
+    esac
     failed=0
     for law in tests/*.sh; do "$law" || failed=1; done
-    drive "" || failed=1
+    if [ "${2:-}" = --drives ]; then drive "" || failed=1; fi
     [ "$failed" = 0 ] || { echo "❌ A check failed. Each message above says what broke and how to fix it."; exit 1; }
-    echo "✅ All laws and drives pass."
+    if [ "${2:-}" = --drives ]; then echo "✅ All laws and drives pass."
+    else echo "✅ All laws pass. The drives didn't run: ./build.sh check --drives runs them."; fi
     exit 0
     ;;
   drive)
@@ -56,7 +62,7 @@ case "${1:-}" in
     exit $?
     ;;
   *)
-    echo "error: unknown option '$1'. Use ./build.sh, ./build.sh check, or ./build.sh drive [name]."
+    echo "error: unknown option '$1'. Use ./build.sh, ./build.sh check [--drives], or ./build.sh drive [name]."
     exit 1
     ;;
 esac
