@@ -106,6 +106,8 @@ that, being signed out.
   never sends: a one-step export from before Fetch and Download were split.
 - Chrome can't load a zip. The Chrome zip has to be unzipped and loaded
   unpacked; `./build.sh` keeps an unpacked copy in `artifacts/chrome/`.
+- `./build.sh` moves earlier zips into `artifacts/old_versions/` before it
+  builds, so `artifacts/` holds only the current version.
 - The gate's height is set by hand (`#gate`'s min-height in popup.html) to match
   the fresh setup view, so the popup doesn't resize when the controls replace
   it. The Chromium drive fails when they drift apart.

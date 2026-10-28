@@ -83,6 +83,18 @@ fi
 echo "🔍 Linting extension..."
 npm run --silent lint
 
+# Move earlier zips into old_versions/ so artifacts/ holds only the build about to be
+# made. After the lint, so a failed lint leaves the last good build where it was.
+echo ""
+echo "🗄  Archiving previous builds to old_versions/..."
+mkdir -p "$ARTIFACTS/old_versions"
+shopt -s nullglob
+for zip in "$ARTIFACTS"/*.zip; do
+  mv "$zip" "$ARTIFACTS/old_versions/"
+  echo "   moved $(basename "$zip")"
+done
+shopt -u nullglob
+
 echo ""
 echo "📦 Building extension..."
 npm run --silent build

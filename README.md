@@ -38,7 +38,7 @@ Claude.ai  ──(extension)──▶  export.json  ──(pipeline)──▶  s
 ### 1. Build and install the extension
 
 ```bash
-./build.sh            # lints + builds the extension into artifacts/ (needs Node 20+)
+./build.sh            # lints + builds the extension into artifacts/ (needs Node 20+); older builds go to artifacts/old_versions/
 ```
 
 One build runs in both browsers.
