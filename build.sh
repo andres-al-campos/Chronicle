@@ -83,13 +83,16 @@ fi
 echo "🔍 Linting extension..."
 npm run --silent lint
 
-# Move earlier zips into old_versions/ so artifacts/ holds only the build about to be
-# made. After the lint, so a failed lint leaves the last good build where it was.
+# Move other versions' zips into old_versions/ so artifacts/ holds only this version's
+# build. This version's zips stay to be overwritten: archived, a rebuild at the same
+# version would leave a copy of itself in old_versions/. After the lint, so a failed
+# lint leaves the last good build where it was.
 echo ""
 echo "🗄  Archiving previous builds to old_versions/..."
 mkdir -p "$ARTIFACTS/old_versions"
 shopt -s nullglob
 for zip in "$ARTIFACTS"/*.zip; do
+  case "$zip" in "$FIREFOX_ZIP"|"$CHROME_ZIP") continue ;; esac
   mv "$zip" "$ARTIFACTS/old_versions/"
   echo "   moved $(basename "$zip")"
 done
