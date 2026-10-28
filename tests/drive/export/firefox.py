@@ -38,7 +38,7 @@ GATE = """return {
     controls: getComputedStyle(document.getElementById('setupPanel')).display !== 'none',
 };"""
 SIGNED_OUT = "You're signed out of claude.ai"
-CHALLENGE = "claude.ai wants your browser to check in"
+CHALLENGE = "Open claude.ai first"
 HAS_CLAUDE = "chrome.permissions.contains({ origins: ['https://claude.ai/*'] }).then(done);"
 
 

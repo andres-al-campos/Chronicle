@@ -540,8 +540,8 @@ async function runGate() {
     return showGate("Chronicle can't read claude.ai", detail, 'Try again', runGate);
   }
   if (detail === 'challenge') {
-    return showGate('claude.ai wants your browser to check in',
-      'Open claude.ai and let it load, then open Chronicle Export again.',
+    return showGate('Open claude.ai first',
+      "claude.ai is checking this browser isn't a bot. Let the page finish loading, then open Chronicle Export again.",
       'Open claude.ai', () => openClaude('https://claude.ai/'));
   }
   if (detail === 'offline') {
