@@ -152,8 +152,7 @@ if (window.__chronicleExportLoaded) {
   async function getOrgId() {
     const orgs = await fetchJsonWithBackoff('https://claude.ai/api/organizations', 'list organizations');
     if (!Array.isArray(orgs) || orgs.length === 0) throw new Error('No organizations returned by claude.ai. Make sure you are logged in.');
-    const chatOrg = orgs.find((o) => Array.isArray(o.capabilities) && o.capabilities.includes('chat'));
-    return (chatOrg || orgs[0]).uuid;
+    return pickChatOrg(orgs);
   }
 
   async function listProjects(orgId) {
@@ -346,8 +345,7 @@ if (window.__chronicleExportLoaded) {
           const field = c.updated_at;
           if (!dateInRange(field, startDate, endDate)) continue;
         }
-        const prev = seenConversations[c.uuid];
-        if (prev && c.updated_at && c.updated_at <= prev) {
+        if (isUnchanged(c, seenConversations)) {
           skippedUnchanged++;
           continue;
         }
@@ -591,8 +589,7 @@ if (window.__chronicleExportLoaded) {
             const field = c[rangeField];
             if (!dateInRange(field, startDate, endDate)) continue;
           }
-          const prev = seenConversations[c.uuid];
-          if (prev && c.updated_at && c.updated_at <= prev) {
+          if (isUnchanged(c, seenConversations)) {
             skippedUnchanged++;
             continue;
           }

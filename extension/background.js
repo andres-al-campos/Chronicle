@@ -5,10 +5,10 @@
 
 // Firefox loads session.js from the manifest's background scripts; a Chrome
 // service worker takes one file, so it imports it here.
-if (typeof importScripts === 'function') importScripts('session.js');
+if (typeof importScripts === 'function') importScripts('session.js', 'changes.js');
 
 function injectContentScript(tabId, callback) {
-  chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] }, callback);
+  chrome.scripting.executeScript({ target: { tabId }, files: ['changes.js', 'content.js'] }, callback);
 }
 
 // When injection failed because the user took claude.ai access away, say where
