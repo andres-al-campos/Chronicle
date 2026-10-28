@@ -1,7 +1,8 @@
 """Export check, Firefox half: with the built zip installed as a temporary
 add-on, check claude.ai access is granted at install, the popup reaches a
-claude.ai tab the way Fetch does, and with access revoked Fetch says where to
-turn it back on.
+claude.ai tab the way Fetch does, the sign-in gate hides the controls (this
+profile is signed out, so claude.ai answers signed out or with a Cloudflare
+challenge), and with access revoked the gate says where to turn it back on.
 
 Firefox is started by export.sh (through `open`, so its own process sandbox
 works inside a sandboxed shell) with Marionette on port 2828; this attaches.
@@ -29,6 +30,15 @@ ENSURE_AND_PING = """
                    error: chrome.runtime.lastError && chrome.runtime.lastError.message });
         });
     });"""
+GATE = """return {
+    gated: document.body.classList.contains('gated'),
+    title: document.getElementById('gateTitle').textContent,
+    detail: document.getElementById('gateDetail').textContent,
+    button: document.getElementById('gateBtn').textContent,
+    controls: getComputedStyle(document.getElementById('setupPanel')).display !== 'none',
+};"""
+SIGNED_OUT = "You're signed out of claude.ai"
+CHALLENGE = "claude.ai wants your browser to check in"
 HAS_CLAUDE = "chrome.permissions.contains({ origins: ['https://claude.ai/*'] }).then(done);"
 
 
@@ -49,12 +59,7 @@ def run(js):
     return d.execute_async_script("const done = arguments[arguments.length - 1];" + js)
 
 
-try:
-    d.install_addon(zip_path, temporary=True)
-    d.get("https://claude.ai/login")
-    time.sleep(2)
-    claude = d.current_window_handle
-
+def open_popup():
     # Marionette won't drive a content tab to moz-extension://; open it from chrome.
     d.set_context("chrome")
     d.execute_script(
@@ -64,6 +69,23 @@ try:
     d.set_context("content")
     time.sleep(1)
     d.switch_to.window(d.window_handles[-1])
+
+
+def settled_gate():
+    for _ in range(100):
+        g = d.execute_script(GATE)
+        if not g["gated"] or g["title"] != "Checking claude.ai…":
+            return g
+        time.sleep(0.1)
+    fail("the popup still says 'Checking claude.ai…' after 10s. Look at checkClaudeSession in session.js.")
+
+
+try:
+    d.install_addon(zip_path, temporary=True)
+    d.get("https://claude.ai/login")
+    time.sleep(2)
+
+    open_popup()
 
     label = d.find_element("id", "version").text
     if label != f"v{version}":
@@ -77,22 +99,32 @@ try:
         fail(f"popup couldn't reach the claude.ai tab: {res}. "
              "Look at background.js (injection) and content.js (the ping handler).")
 
-    # Revoke access, reload claude.ai so the declared content script is gone,
-    # and press Fetch as a user would.
+    gate = settled_gate()
+    if not gate["gated"] or gate["controls"] or gate["title"] not in (SIGNED_OUT, CHALLENGE):
+        fail(f"signed out, the popup should hide its controls behind the gate; it shows {gate}. "
+             "Look at runGate in popup.js and checkClaudeSession in session.js.")
+    gate_seen = "signed out" if gate["title"] == SIGNED_OUT else "Cloudflare challenge"
+    if gate["title"] == SIGNED_OUT:
+        before = set(d.window_handles)
+        d.find_element("id", "gateBtn").click()
+        time.sleep(2)
+        new = set(d.window_handles) - before
+        if not new:
+            fail("Sign in opened no tab. Look at openClaude in popup.js.")
+        d.switch_to.window(new.pop())
+        if not d.current_url.startswith("https://claude.ai/login"):
+            fail(f"Sign in opened {d.current_url}, expected claude.ai/login. Look at openClaude in popup.js.")
+
+    # Revoke access and open the popup again, as a user would.
+    open_popup()
     run("chrome.permissions.remove({ origins: ['https://claude.ai/*'] }).then(done);")
-    popup = d.current_window_handle
-    d.switch_to.window(claude)
     d.refresh()
-    time.sleep(2)
-    d.switch_to.window(popup)
-    d.find_element("id", "fetchBtn").click()
-    time.sleep(1)
-    status = d.find_element("id", "status").text
-    if "about:addons" not in status:
-        fail(f"with claude.ai access off, Fetch says {status!r}; it should say where to allow claude.ai. "
-             "Look at explainInjectError in background.js.")
+    gate = settled_gate()
+    if gate["controls"] or "about:addons" not in gate["detail"]:
+        fail(f"with claude.ai access off, the gate shows {gate}; it should say where to allow claude.ai. "
+             "Look at NO_CLAUDE_ACCESS in session.js.")
 finally:
     d.quit()
 
 print(f"✓ export (Firefox): access granted at install, popup at v{version} pings the claude.ai tab, "
-      "and with access off Fetch says where to allow it")
+      f"the gate hides the controls ({gate_seen}), and with access off it says where to allow claude.ai")

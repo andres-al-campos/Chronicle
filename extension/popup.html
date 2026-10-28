@@ -347,14 +347,45 @@
     button.link:hover { color: var(--accent); }
 
     .hidden { display: none !important; }
+
+    /* ── Sign-in gate ──
+       Nothing to do until claude.ai says who you are, so the gate takes the
+       setup view's place. It holds that view's height, so the popup opens at
+       its final size and nothing jumps when the controls arrive. */
+    #gate {
+      min-height: 188px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      text-align: center;
+    }
+    body:not(.gated) #gate { display: none; }
+    body.gated main > :not(#gate) { display: none !important; }
+    .gate-title { margin: 0; font-size: 14px; font-weight: 600; }
+    .gate-title.checking { font-weight: 400; color: var(--muted); }
+    .gate-detail { margin: 0; max-width: 380px; color: var(--muted); line-height: 1.45; }
+    #gateBtn { width: auto; padding: 8px 20px; margin-top: 4px; }
+    @media (prefers-reduced-motion: no-preference) {
+      .fade-in { animation: fade-in 180ms ease-out; }
+      @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+    }
   </style>
 </head>
-<body>
+<body class="gated">
   <header>
     <span class="title">Chronicle Export</span>
     <span class="version" id="version"></span>
   </header>
   <main>
+    <!-- Sign-in gate: shown until claude.ai confirms you're signed in -->
+    <div id="gate" aria-live="polite">
+      <p class="gate-title checking" id="gateTitle">Checking claude.ai…</p>
+      <p class="gate-detail hidden" id="gateDetail"></p>
+      <button class="primary hidden" id="gateBtn"></button>
+    </div>
+
     <!-- Setup panel -->
     <div id="setupPanel">
       <div id="lastDownload" class="last-download hidden"></div>
@@ -408,6 +439,7 @@
       </div>
     </div>
   </main>
+  <script src="session.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

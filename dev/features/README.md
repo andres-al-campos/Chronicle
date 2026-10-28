@@ -1,6 +1,6 @@
 # Chronicle features
 
-Updated 2026-10-26 20:33, at 0.4.0.
+Updated 2026-10-27 19:56, at 0.4.0.
 
 What a user can do with Chronicle, how to reach it, and how to drive it. Read
 this before adding anything: if it's already here, extend it instead of
@@ -10,7 +10,7 @@ This map is partial. It grows one feature at a time, as each is changed.
 
 | Feature | File | Platforms | Driveable headless? |
 |---|---|---|---|
-| Export | [export.md](export.md) | Chrome, Firefox | Partly: reaching claude.ai yes, a signed-in export no |
+| Export | [export.md](export.md) | Chrome, Firefox | Partly: reaching claude.ai and the sign-in gate yes, a signed-in export no |
 
 ## What counts as a feature
 

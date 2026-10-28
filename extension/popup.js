@@ -23,7 +23,12 @@ const els = {
   footer: document.getElementById('footer'),
   downloadBtn: document.getElementById('downloadBtn'),
   newExportBtn: document.getElementById('newExportBtn'),
-  log: document.getElementById('log')
+  log: document.getElementById('log'),
+  main: document.querySelector('main'),
+  gate: document.getElementById('gate'),
+  gateTitle: document.getElementById('gateTitle'),
+  gateDetail: document.getElementById('gateDetail'),
+  gateBtn: document.getElementById('gateBtn')
 };
 
 let elapsedTimer = null;
@@ -487,6 +492,66 @@ function loadPrefs() {
   return new Promise((resolve) => chrome.storage.local.get(['prefs'], (r) => resolve(r.prefs || {})));
 }
 
+// ──────────────────────────── sign-in gate ────────────────────────────
+
+let gateAction = null;
+
+function fadeIn(el) {
+  el.classList.remove('fade-in');
+  void el.offsetWidth;  // restart the animation
+  el.classList.add('fade-in');
+}
+
+function openClaude(url) {
+  chrome.tabs.create({ url, active: true });
+  window.close();
+}
+
+function showGate(title, detail, button, action) {
+  els.gateTitle.textContent = title;
+  els.gateTitle.classList.remove('checking');
+  els.gateDetail.textContent = detail;
+  els.gateDetail.classList.remove('hidden');
+  els.gateBtn.textContent = button;
+  els.gateBtn.classList.remove('hidden');
+  gateAction = action;
+  fadeIn(els.gate);
+}
+
+function openApp() {
+  document.body.classList.remove('gated');
+  fadeIn(els.main);
+}
+
+async function runGate() {
+  els.gateTitle.textContent = 'Checking claude.ai…';
+  els.gateTitle.classList.add('checking');
+  els.gateDetail.classList.add('hidden');
+  els.gateBtn.classList.add('hidden');
+
+  const { state, detail } = await checkClaudeSession();
+  if (state === 'signedIn') return openApp();
+  if (state === 'signedOut') {
+    return showGate("You're signed out of claude.ai",
+      'Sign in, then open Chronicle Export again.',
+      'Sign in', () => openClaude('https://claude.ai/login'));
+  }
+  if (state === 'noAccess') {
+    return showGate("Chronicle can't read claude.ai", detail, 'Try again', runGate);
+  }
+  if (detail === 'challenge') {
+    return showGate('claude.ai wants your browser to check in',
+      'Open claude.ai and let it load, then open Chronicle Export again.',
+      'Open claude.ai', () => openClaude('https://claude.ai/'));
+  }
+  if (detail === 'offline') {
+    return showGate("Can't reach claude.ai",
+      'Check your connection, then try again.', 'Try again', runGate);
+  }
+  showGate("claude.ai answered in a way Chronicle doesn't recognize",
+    "Open claude.ai to check it's working, then try again.", 'Try again', runGate);
+}
+
 // ──────────────────────────── init ────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -500,6 +565,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const state = await readState();
   renderFromState(state);
+
+  els.gateBtn.addEventListener('click', () => gateAction && gateAction());
+  // A run in progress, or a fetched list waiting to download, needs no sign-in:
+  // downloading reads what was already fetched. Only a new fetch does.
+  const busy = state.currentRun || (state.fetchedMetas && state.fetchedMetas.length > 0);
+  if (busy) openApp();
+  else runGate();
 
   chrome.storage.onChanged.addListener(onStorageChanged);
 
