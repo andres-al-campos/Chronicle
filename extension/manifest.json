@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Chronicle Export",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Export Claude.ai conversations for the Chronicle pipeline.",
   "permissions": [
     "activeTab",
