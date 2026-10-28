@@ -1,6 +1,6 @@
 # Export
 
-Updated 2026-10-28 17:42, at 0.5.0.
+Updated 2026-10-28 17:45, at 0.5.0.
 
 The browser extension saves your claude.ai conversations to a JSON file the
 pipeline ingests. The same build runs in Chrome and Firefox.
@@ -121,43 +121,48 @@ that, being signed out.
   gate passing in Alejandro's Firefox does.
 - Extension pages forbid `eval`, so Playwright's `wait_for_function` can't run
   in the popup; the drive polls with `evaluate`.
+- A tab that takes focus closes the popup in both browsers, so anything the
+  extension opens while the popup should stay up opens with `active: false`.
+- What counts as changed lives in `changes.js`, loaded by both the content
+  script (Fetch) and the background (the badge), so they always agree. It holds
+  only function declarations: the content script can be injected into a tab
+  twice, and a repeated top-level `const` would throw.
+- Firefox forgets alarms when it quits, so the reminder's due time is kept in
+  storage (`lastReminderAt`) and the alarm is set again from it whenever the
+  background starts.
+- Firefox 146 opens the toolbar popup from `action.openPopup()` without a user
+  gesture, even when the button sits in the Extensions menu. Where it throws,
+  the popup opens in a small window instead.
+- A tab the browser unloaded (restored at startup and never clicked, or
+  Chrome's Memory Saver) can't be injected into; Firefox says only "An
+  unexpected error occurred". Reloading it wakes it, but Firefox first reports
+  "complete" for the restored placeholder, before the real page starts loading,
+  so the wait holds out for a "loading" first.
+- Discarding a tab in Playwright's headless Chromium takes the browser down, so
+  only the Firefox drive covers unloaded tabs.
 
 ## Calls
 
 - 2026-10-27 23:06, 0.4.0. A notification once a week, with no threshold; clicking it opens the popup,
   which never opens on its own (Alejandro: "nothreshold just weekly"). A week
-  with nothing changed sends none (Alejandro, 2026-10-27).
+  with nothing changed sends none (Alejandro, 2026-10-27). Applies *Costly steps
+  stay yours*.
 
 - 2026-10-27 20:27, 0.4.0. The badge shows the count of conversations changed since the last export, and
   "!" when signed out (Alejandro, agreeing to it once a signed build was needed
-  anyway). Hourly checks and "!" for revoked access too are guesses.
-- 2026-10-28 17:28, 0.5.0. The count's badge is a neutral grey, not the popup's purple, which looked odd
-  on the icon's orange (Alejandro, 2026-10-28).
+  anyway). Hourly checks and "!" for revoked access too are guesses. Applies
+  *Costly steps stay yours*.
+- 2026-10-28 17:45, 0.5.0. The count's badge is a neutral grey, not the popup's purple, which looked odd
+  on the icon's orange (Alejandro, 2026-10-28; he saw the grey in his toolbar
+  and kept it).
 
 - 2026-10-27 20:17, 0.4.0. Fetch opens claude.ai itself when no tab is open (Alejandro, in the plan for
   less sign-in friction). It opens behind, since a focused tab closes the popup
-  and its progress; that part is a guess.
+  and its progress; that part is a guess. Applies *Costly steps stay yours*.
+- 2026-10-28 17:45, 0.5.0. Fetch reloads a claude.ai tab the browser unloaded instead of asking you to
+  click on it (a guess, not yet questioned). Applies *Costly steps stay yours*.
 
 - 2026-10-27 19:56, 0.4.0. No controls until the sign-in check passes; the gate uses their space to say
   what's wrong (Alejandro: "i shouldnt even show you the controls until you
   signed in. so it can use that space to notify you"). Applies *Motion spends
   attention*: the popup opens at its final size and the gate's answer fades in.
-- 2026-10-27 20:17, 0.4.0. A tab that takes focus closes the popup in both browsers, so anything the
-  extension opens while the popup should stay up opens with `active: false`.
-- 2026-10-27 20:27, 0.4.0. What counts as changed lives in `changes.js`, loaded by both the content
-  script (Fetch) and the background (the badge), so they always agree. It holds
-  only function declarations: the content script can be injected into a tab
-  twice, and a repeated top-level `const` would throw.
-- 2026-10-27 22:41, 0.4.0. Firefox forgets alarms when it quits, so the reminder's due time is kept in
-  storage (`lastReminderAt`) and the alarm is set again from it whenever the
-  background starts.
-- 2026-10-27 22:41, 0.4.0. Firefox 146 opens the toolbar popup from `action.openPopup()` without a user
-  gesture, even when the button sits in the Extensions menu. Where it throws,
-  the popup opens in a small window instead.
-- 2026-10-28 17:28, 0.5.0. A tab the browser unloaded (restored at startup and never clicked, or
-  Chrome's Memory Saver) can't be injected into; Firefox says only "An
-  unexpected error occurred". Reloading it wakes it, but Firefox first reports
-  "complete" for the restored placeholder, before the real page starts loading,
-  so the wait holds out for a "loading" first.
-- 2026-10-28 17:28, 0.5.0. Discarding a tab in Playwright's headless Chromium takes the browser down, so
-  only the Firefox drive covers unloaded tabs.
