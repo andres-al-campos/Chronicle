@@ -114,9 +114,9 @@ that, being signed out.
 
 ## Calls
 
-- 2026-10-27 22:41, 0.4.0. A notification once a week, with no threshold; clicking it opens the popup,
-  which never opens on its own (Alejandro: "nothreshold just weekly"). Skipping
-  a week with nothing changed is a guess.
+- 2026-10-27 23:06, 0.4.0. A notification once a week, with no threshold; clicking it opens the popup,
+  which never opens on its own (Alejandro: "nothreshold just weekly"). A week
+  with nothing changed sends none (Alejandro, 2026-10-27).
 
 - 2026-10-27 20:27, 0.4.0. The badge shows the count of conversations changed since the last export, and
   "!" when signed out (Alejandro, agreeing to it once a signed build was needed
