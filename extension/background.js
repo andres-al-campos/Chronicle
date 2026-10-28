@@ -3,22 +3,18 @@
 // install/update so the popup can talk to it immediately after a reload.
 // Holds no state, so it runs as a Chrome service worker or a Firefox event page.
 
+// Firefox loads session.js from the manifest's background scripts; a Chrome
+// service worker takes one file, so it imports it here.
+if (typeof importScripts === 'function') importScripts('session.js');
+
 function injectContentScript(tabId, callback) {
   chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] }, callback);
 }
 
-// MV3 lets the user take claude.ai access away after install. When that's why
-// injection failed, say where to give it back instead of the browser's bare
-// "Missing host permission".
-const NO_CLAUDE_ACCESS = "Chronicle isn't allowed to read claude.ai. "
-  + 'In Firefox: about:addons → Chronicle Export → Permissions, turn on claude.ai. '
-  + 'In Chrome: chrome://extensions → Chronicle Export → Details → Site access, allow claude.ai. '
-  + 'Then click Fetch again.';
-
+// When injection failed because the user took claude.ai access away, say where
+// to give it back instead of the browser's bare "Missing host permission".
 function explainInjectError(message, callback) {
-  chrome.permissions.contains({ origins: ['https://claude.ai/*'] }, (granted) => {
-    callback(granted ? message : NO_CLAUDE_ACCESS);
-  });
+  hasClaudeAccess().then((granted) => callback(granted ? message : NO_CLAUDE_ACCESS));
 }
 
 chrome.runtime.onInstalled.addListener(() => {

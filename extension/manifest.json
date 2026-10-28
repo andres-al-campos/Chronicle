@@ -33,7 +33,7 @@
   ],
   "background": {
     "service_worker": "background.js",
-    "scripts": ["background.js"]
+    "scripts": ["session.js", "background.js"]
   },
   "browser_specific_settings": {
     "gecko": {
