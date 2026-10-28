@@ -1,6 +1,6 @@
 # Export
 
-Updated 2026-10-28 17:31, at 0.5.0.
+Updated 2026-10-28 17:42, at 0.5.0.
 
 The browser extension saves your claude.ai conversations to a JSON file the
 pipeline ingests. The same build runs in Chrome and Firefox.
@@ -79,7 +79,9 @@ answer was "signed out" rather than a challenge, and with access revoked the
 gate says where to allow it.
 
 Fetch and Download against a signed-in account are by hand only: they need a
-real account, and a session must not sign in for the user.
+real account, and a session must not sign in for the user. Last by hand:
+2026-10-28, Alejandro in Firefox at 0.5.0: the gate let him through and Fetch
+worked through a claude.ai tab Firefox had unloaded.
 
 Last driven: 2026-10-28, Chromium 145 and Firefox 146 (Firefox got "signed
 out"). Both passed. Both failed with the gate skipped (`openApp()` in place of
@@ -115,8 +117,8 @@ that, being signed out.
   it. The Chromium drive fails when they drift apart.
 - Signed out, `/api/organizations` answers 403 JSON (`permission_error`). A
   Cloudflare challenge is also a 403, but HTML; it's the "can't tell" case.
-  The signed-in answer (200, an array of orgs) is assumed, not yet seen by a
-  drive.
+  Signed in, it answers 200 with an array of orgs: no drive sees that, but the
+  gate passing in Alejandro's Firefox does.
 - Extension pages forbid `eval`, so Playwright's `wait_for_function` can't run
   in the popup; the drive polls with `evaluate`.
 
