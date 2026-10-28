@@ -1,6 +1,6 @@
 # Export
 
-Updated 2026-10-27 22:41, at 0.4.0.
+Updated 2026-10-28 17:28, at 0.5.0.
 
 The browser extension saves your claude.ai conversations to a JSON file the
 pipeline ingests. The same build runs in Chrome and Firefox.
@@ -17,7 +17,8 @@ pipeline ingests. The same build runs in Chrome and Firefox.
 - **Fetch**: all conversations, or those updated between two dates. Runs in
   a claude.ai tab with your signed-in session, so closing the popup doesn't
   stop it. With no claude.ai tab open, it opens one behind the current tab and
-  waits up to 30s for it to load; progress, elapsed time and a log show when the popup reopens.
+  waits up to 30s for it to load; a claude.ai tab the browser unloaded to save
+  memory, it reloads first; progress, elapsed time and a log show when the popup reopens.
   Cancel stops it.
 - **Only what changed**: conversations not updated since they were last
   downloaded are skipped. Ones that have since disappeared from claude.ai are
@@ -25,8 +26,8 @@ pipeline ingests. The same build runs in Chrome and Firefox.
 - **Pick and download**: the fetched conversations are listed with title,
   date and word count, changed ones marked. Download saves the checked ones as
   one `chronicle-export-…json`.
-- **Toolbar badge**: how many conversations changed since your last export
-  (blank at none, "99+" past 99), or a red "!" when you're signed out of
+- **Toolbar badge**: how many conversations changed since your last export, on
+  grey (blank at none, "99+" past 99), or a red "!" when you're signed out of
   claude.ai or Chronicle can't read it. Hovering says which. Checked hourly,
   when the browser starts, when you open the popup, and after a download. It
   only lists conversations, with no tab. When claude.ai can't be reached it
@@ -54,7 +55,8 @@ Playwright's Chromium (`uvx playwright@1.58.0 install chromium`). No sign-in.
 headless Firefox opens claude.ai's login page and the popup, and checks the
 popup shows the manifest's version and reaches the claude.ai tab's content
 script the way Fetch does. Then it closes every claude.ai tab and checks Fetch
-opens one, reaches it, and leaves the popup's tab in front.
+opens one, reaches it, and leaves the popup's tab in front. In Firefox it first
+unloads (discards) the claude.ai tab and checks Fetch still reaches it.
 
 The badge, in Chromium with claude.ai's conversation list mocked: "3" with
 nothing exported, "2" after marking one as exported unchanged and one as
@@ -79,10 +81,12 @@ gate says where to allow it.
 Fetch and Download against a signed-in account are by hand only: they need a
 real account, and a session must not sign in for the user.
 
-Last driven: 2026-10-27, Chromium 145 and Firefox 146 (Firefox got "signed
+Last driven: 2026-10-28, Chromium 145 and Firefox 146 (Firefox got "signed
 out"). Both passed. Both failed with the gate skipped (`openApp()` in place of
 `runGate()`), with Fetch giving up when no claude.ai tab is open, with the
 tab it opens taking focus, and with signing out leaving the badge as it was.
+Firefox failed with an unloaded tab not woken: Fetch got "An unexpected error
+occurred", as Alejandro saw in the real popup.
 Chromium failed with the reminder sent in a week with nothing changed and with
 an overdue reminder waiting a week; Firefox failed with the click opening no
 popup (headless Chromium can't show one).
@@ -121,6 +125,8 @@ that, being signed out.
 - 2026-10-27 20:27, 0.4.0. The badge shows the count of conversations changed since the last export, and
   "!" when signed out (Alejandro, agreeing to it once a signed build was needed
   anyway). Hourly checks and "!" for revoked access too are guesses.
+- 2026-10-28 17:28, 0.5.0. The count's badge is a neutral grey, not the popup's purple, which looked odd
+  on the icon's orange (Alejandro, 2026-10-28).
 
 - 2026-10-27 20:17, 0.4.0. Fetch opens claude.ai itself when no tab is open (Alejandro, in the plan for
   less sign-in friction). It opens behind, since a focused tab closes the popup
@@ -142,3 +148,10 @@ that, being signed out.
 - 2026-10-27 22:41, 0.4.0. Firefox 146 opens the toolbar popup from `action.openPopup()` without a user
   gesture, even when the button sits in the Extensions menu. Where it throws,
   the popup opens in a small window instead.
+- 2026-10-28 17:28, 0.5.0. A tab the browser unloaded (restored at startup and never clicked, or
+  Chrome's Memory Saver) can't be injected into; Firefox says only "An
+  unexpected error occurred". Reloading it wakes it, but Firefox first reports
+  "complete" for the restored placeholder, before the real page starts loading,
+  so the wait holds out for a "loading" first.
+- 2026-10-28 17:28, 0.5.0. Discarding a tab in Playwright's headless Chromium takes the browser down, so
+  only the Firefox drive covers unloaded tabs.
