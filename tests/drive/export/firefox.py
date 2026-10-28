@@ -123,7 +123,15 @@ try:
     if not gate["gated"] or gate["controls"] or gate["title"] not in (SIGNED_OUT, CHALLENGE):
         fail(f"signed out, the popup should hide its controls behind the gate; it shows {gate}. "
              "Look at runGate in popup.js and checkClaudeSession in session.js.")
-    gate_seen = "signed out" if gate["title"] == SIGNED_OUT else "Cloudflare challenge"
+    if gate["title"] == SIGNED_OUT:
+        for _ in range(50):
+            badge = run("chrome.action.getBadgeText({}).then(done);")
+            if badge == "!":
+                break
+            time.sleep(0.1)
+        else:
+            fail(f"signed out, the toolbar badge says {badge!r}, expected '!'. Look at refreshBadge in background.js.")
+    gate_seen = "signed out, badge '!'" if gate["title"] == SIGNED_OUT else "Cloudflare challenge"
     if gate["title"] == SIGNED_OUT:
         before = set(d.window_handles)
         d.find_element("id", "gateBtn").click()

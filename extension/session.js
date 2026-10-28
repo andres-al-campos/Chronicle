@@ -16,7 +16,7 @@ function hasClaudeAccess() {
 }
 
 // Resolves to { state, detail }:
-//   signedIn  – the API answered with the user's organizations.
+//   signedIn  – the API answered with the user's organizations (in orgs).
 //   signedOut – the API answered as JSON that the session is missing or invalid.
 //   noAccess  – the user took claude.ai access away from the extension.
 //   unknown   – anything else: offline, claude.ai down, or Cloudflare asking the
@@ -42,7 +42,7 @@ async function checkClaudeSession() {
   const isJson = (res.headers.get('content-type') || '').includes('application/json');
   if (res.ok && isJson) {
     const orgs = await res.json().catch(() => null);
-    if (Array.isArray(orgs) && orgs.length > 0) return { state: 'signedIn' };
+    if (Array.isArray(orgs) && orgs.length > 0) return { state: 'signedIn', orgs };
     return { state: 'unknown', detail: 'unexpected' };
   }
   if ((res.status === 401 || res.status === 403) && isJson) return { state: 'signedOut' };

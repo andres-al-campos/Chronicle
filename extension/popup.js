@@ -530,6 +530,8 @@ async function runGate() {
   els.gateBtn.classList.add('hidden');
 
   const { state, detail } = await checkClaudeSession();
+  // You may have just signed in or out; the badge should say so now, not in an hour.
+  chrome.runtime.sendMessage({ action: 'refreshBadge' }, () => void chrome.runtime.lastError);
   if (state === 'signedIn') return openApp();
   if (state === 'signedOut') {
     return showGate("You're signed out of claude.ai",

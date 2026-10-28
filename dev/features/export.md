@@ -1,6 +1,6 @@
 # Export
 
-Updated 2026-10-27 20:17, at 0.4.0.
+Updated 2026-10-27 20:27, at 0.4.0.
 
 The browser extension saves your claude.ai conversations to a JSON file the
 pipeline ingests. The same build runs in Chrome and Firefox.
@@ -25,6 +25,12 @@ pipeline ingests. The same build runs in Chrome and Firefox.
 - **Pick and download**: the fetched conversations are listed with title,
   date and word count, changed ones marked. Download saves the checked ones as
   one `chronicle-export-…json`.
+- **Toolbar badge**: how many conversations changed since your last export
+  (blank at none, "99+" past 99), or a red "!" when you're signed out of
+  claude.ai or Chronicle can't read it. Hovering says which. Checked hourly,
+  when the browser starts, when you open the popup, and after a download. It
+  only lists conversations, with no tab. When claude.ai can't be reached it
+  keeps what it last said.
 - **No claude.ai access**: when the user has taken claude.ai access away, the
   gate (or Fetch, if it was revoked mid-session) says where to give it back in
   each browser.
@@ -45,6 +51,11 @@ popup shows the manifest's version and reaches the claude.ai tab's content
 script the way Fetch does. Then it closes every claude.ai tab and checks Fetch
 opens one, reaches it, and leaves the popup's tab in front.
 
+The badge, in Chromium with claude.ai's conversation list mocked: "3" with
+nothing exported, "2" after marking one as exported unchanged and one as
+exported before its latest change, "!" once signed out. In Firefox, signed out
+for real, it says "!".
+
 The sign-in gate, in Chromium with claude.ai's `/api/organizations` mocked:
 signed out and challenged both hide the controls and read differently, Sign in
 opens claude.ai/login, and signed in shows the controls at the gate's height.
@@ -58,8 +69,10 @@ real account, and a session must not sign in for the user.
 
 Last driven: 2026-10-27, Chromium 145 and Firefox 146 (Firefox got "signed
 out"). Both passed. Both failed with the gate skipped (`openApp()` in place of
-`runGate()`), with Fetch giving up when no claude.ai tab is open, and with the
-tab it opens taking focus.
+`runGate()`), with Fetch giving up when no claude.ai tab is open, with the
+tab it opens taking focus, and with signing out leaving the badge as it was.
+Chromium failed with every conversation counted as changed; Firefox can't see
+that, being signed out.
 
 ## Gotchas
 
@@ -86,6 +99,10 @@ tab it opens taking focus.
 
 ## Calls
 
+- 2026-10-27 20:27, 0.4.0. The badge shows the count of conversations changed since the last export, and
+  "!" when signed out (Alejandro, agreeing to it once a signed build was needed
+  anyway). Hourly checks and "!" for revoked access too are guesses.
+
 - 2026-10-27 20:17, 0.4.0. Fetch opens claude.ai itself when no tab is open (Alejandro, in the plan for
   less sign-in friction). It opens behind, since a focused tab closes the popup
   and its progress; that part is a guess.
@@ -96,3 +113,7 @@ tab it opens taking focus.
   attention*: the popup opens at its final size and the gate's answer fades in.
 - 2026-10-27 20:17, 0.4.0. A tab that takes focus closes the popup in both browsers, so anything the
   extension opens while the popup should stay up opens with `active: false`.
+- 2026-10-27 20:27, 0.4.0. What counts as changed lives in `changes.js`, loaded by both the content
+  script (Fetch) and the background (the badge), so they always agree. It holds
+  only function declarations: the content script can be injected into a tab
+  twice, and a repeated top-level `const` would throw.

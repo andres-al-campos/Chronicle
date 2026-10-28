@@ -84,3 +84,66 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   });
   return true;
 });
+
+// ──────────────────────────── toolbar badge ────────────────────────────
+// How many conversations changed since the last export, or "!" when Chronicle
+// can't read claude.ai as you. Checked hourly and whenever an export or the
+// popup might have changed the answer. Only lists conversations: no tab, and
+// nothing is downloaded or summarized.
+
+const BADGE_ALARM = 'badge';
+const BADGE_PERIOD_MIN = 60;
+const BADGE_COUNT_COLOR = '#5436DA';
+const BADGE_WARN_COLOR = '#C5221F';
+
+function setBadge(text, color, title) {
+  chrome.action.setBadgeText({ text });
+  if (color) chrome.action.setBadgeBackgroundColor({ color });
+  chrome.action.setTitle({ title });
+}
+
+async function countChanged(orgs) {
+  const url = `https://claude.ai/api/organizations/${pickChatOrg(orgs)}/chat_conversations`;
+  const res = await fetch(url, { credentials: 'include', headers: { Accept: 'application/json' } });
+  if (!res.ok) return null;
+  const convs = await res.json().catch(() => null);
+  if (!Array.isArray(convs)) return null;
+  const { seenConversations = {} } = await chrome.storage.local.get(['seenConversations']);
+  return convs.filter((c) => !isUnchanged(c, seenConversations)).length;
+}
+
+async function refreshBadge() {
+  const session = await checkClaudeSession();
+  if (session.state === 'signedOut') {
+    return setBadge('!', BADGE_WARN_COLOR, "Chronicle Export: you're signed out of claude.ai. Open it to sign in.");
+  }
+  if (session.state === 'noAccess') {
+    return setBadge('!', BADGE_WARN_COLOR, "Chronicle Export can't read claude.ai. Open it to see how to allow it.");
+  }
+  // Can't tell (offline, a Cloudflare check): keep what the badge last said.
+  if (session.state !== 'signedIn') return;
+  const changed = await countChanged(session.orgs).catch(() => null);
+  if (changed === null) return;
+  const text = changed === 0 ? '' : changed > 99 ? '99+' : String(changed);
+  const title = changed === 0
+    ? 'Chronicle Export: nothing changed since your last export.'
+    : `Chronicle Export: ${changed} conversation${changed === 1 ? '' : 's'} changed since your last export.`;
+  setBadge(text, BADGE_COUNT_COLOR, title);
+}
+
+chrome.alarms.get(BADGE_ALARM, (alarm) => {
+  if (!alarm) chrome.alarms.create(BADGE_ALARM, { delayInMinutes: 1, periodInMinutes: BADGE_PERIOD_MIN });
+});
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === BADGE_ALARM) refreshBadge();
+});
+chrome.runtime.onStartup.addListener(refreshBadge);
+chrome.runtime.onInstalled.addListener(refreshBadge);
+// A download records what was exported, so the count drops.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.seenConversations) refreshBadge();
+});
+// The popup asks after its own sign-in check, since you may have just signed in.
+chrome.runtime.onMessage.addListener((request) => {
+  if (request.action === 'refreshBadge') refreshBadge();
+});

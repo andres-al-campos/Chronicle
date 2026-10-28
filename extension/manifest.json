@@ -5,6 +5,7 @@
   "description": "Export Claude.ai conversations for the Chronicle pipeline.",
   "permissions": [
     "activeTab",
+    "alarms",
     "scripting",
     "storage",
     "tabs"

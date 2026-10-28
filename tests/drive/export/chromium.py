@@ -8,6 +8,7 @@ Needs no sign-in: the content script runs on claude.ai's login page too.
 
 Usage: chromium.py <unpacked extension dir> <expected version>
 """
+import json
 import sys
 import tempfile
 
@@ -35,6 +36,11 @@ ANSWERS = {
                       body='{"type":"error","error":{"type":"permission_error"}}'),
     "challenge": dict(status=403, content_type="text/html", body="<title>Just a moment...</title>"),
 }
+CONVS = "https://claude.ai/api/organizations/org1/chat_conversations"
+CONV_LIST = [{"uuid": "a", "updated_at": "2026-10-20T00:00:00Z"},
+             {"uuid": "b", "updated_at": "2026-10-25T00:00:00Z"},
+             {"uuid": "c", "updated_at": "2026-10-26T00:00:00Z"}]
+BADGE = """() => new Promise((r) => chrome.action.getBadgeText({}, r))"""
 GATE = """() => ({
     gated: document.body.classList.contains('gated'),
     title: document.getElementById('gateTitle').textContent,
@@ -134,6 +140,33 @@ with sync_playwright() as p:
         if not (front or "").startswith("chrome-extension://"):
             fail(f"the claude.ai tab Fetch opened took focus ({front}), which closes a real popup. "
                  "Open it with active: false in background.js.")
+
+        # The badge counts what changed since the last export, and says "!" when signed out.
+        def badge_becomes(expected, after):
+            for _ in range(50):
+                text = popup.evaluate(BADGE)
+                if text == expected:
+                    return
+                popup.wait_for_timeout(100)
+            fail(f"{after}, the toolbar badge says {text!r}, expected {expected!r}. "
+                 "Look at refreshBadge in background.js and isUnchanged in changes.js.")
+
+        ctx.unroute(ORGS)
+        ctx.route(ORGS, lambda route: route.fulfill(
+            status=200, content_type="application/json", body='[{"uuid":"org1","capabilities":["chat"]}]'))
+        ctx.route(CONVS, lambda route: route.fulfill(
+            status=200, content_type="application/json", body=json.dumps(CONV_LIST)))
+        popup.reload()
+        badge_becomes("3", "signed in with 3 conversations and nothing exported")
+        # As a download records it: a exported as is, b exported before its latest change.
+        popup.evaluate("() => chrome.storage.local.set({ seenConversations: "
+                       "{ a: '2026-10-20T00:00:00Z', b: '2026-10-24T00:00:00Z' } })")
+        badge_becomes("2", "after exporting 1 of 3 unchanged")
+        ctx.unroute(ORGS)
+        ctx.route(ORGS, lambda route: route.fulfill(**ANSWERS["signedOut"]))
+        popup.reload()
+        badge_becomes("!", "signed out")
+
         if errors:
             fail(f"popup threw: {errors}. Open popup.html's console in chrome://extensions to see where.")
     finally:
@@ -141,4 +174,5 @@ with sync_playwright() as p:
 
 print(f"✓ export (Chromium): service worker up, popup at v{version} pings the claude.ai tab's content script; "
       "the sign-in gate hides the controls when signed out or challenged, Sign in opens claude.ai/login, "
-      "the controls take the gate's place without a resize, and with no claude.ai tab Fetch opens one behind")
+      "the controls take the gate's place without a resize, with no claude.ai tab Fetch opens one behind, "
+      "and the badge counts what changed since the last export or says '!' when signed out")
