@@ -141,6 +141,9 @@ with sync_playwright() as p:
             fail(f"the claude.ai tab Fetch opened took focus ({front}), which closes a real popup. "
                  "Open it with active: false in background.js.")
 
+        # The unloaded (discarded) tab case is in the Firefox half only: discarding
+        # a tab in Playwright's headless Chromium takes the whole browser down.
+
         # The badge counts what changed since the last export, and says "!" when signed out.
         def badge_becomes(expected, after):
             for _ in range(50):

@@ -99,6 +99,14 @@ try:
         fail(f"popup couldn't reach the claude.ai tab: {res}. "
              "Look at background.js (injection) and content.js (the ping handler).")
 
+    # A claude.ai tab the browser unloaded to save memory: Fetch wakes it.
+    run("chrome.tabs.query({ url: 'https://claude.ai/*' })"
+        ".then((t) => Promise.all(t.map((x) => chrome.tabs.discard(x.id)))).then(() => done());")
+    res = run(ENSURE_AND_PING)
+    pong = res.get("pong") or {}
+    if res.get("error") or pong.get("version") != version:
+        fail(f"with the claude.ai tab unloaded, Fetch didn't reach it: {res}. Look at wakeTab in background.js.")
+
     # With no claude.ai tab open, Fetch opens one without taking focus.
     popup = d.current_window_handle
     for handle in d.window_handles:
@@ -196,5 +204,5 @@ if shown_as:
 else:
     reminder_seen = "the reminder unchecked (claude.ai sent a Cloudflare check, not 'signed out')"
 print(f"✓ export (Firefox): access granted at install, popup at v{version} pings the claude.ai tab "
-      f"(opening one behind when none is open), {reminder_seen}, the gate hides the controls ({gate_seen}), "
+      f"(waking an unloaded one, opening one behind when none is open), {reminder_seen}, the gate hides the controls ({gate_seen}), "
       "and with access off it says where to allow claude.ai")

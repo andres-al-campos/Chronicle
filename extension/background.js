@@ -11,10 +11,13 @@ function injectContentScript(tabId, callback) {
   chrome.scripting.executeScript({ target: { tabId }, files: ['changes.js', 'content.js'] }, callback);
 }
 
-// When injection failed because the user took claude.ai access away, say where
-// to give it back instead of the browser's bare "Missing host permission".
+// The browser's own injection errors don't say what to do ("Missing host
+// permission", "An unexpected error occurred"); say where to give access back,
+// or else to reload claude.ai.
 function explainInjectError(message, callback) {
-  hasClaudeAccess().then((granted) => callback(granted ? message : NO_CLAUDE_ACCESS));
+  hasClaudeAccess().then((granted) => callback(granted
+    ? `Couldn't reach the claude.ai tab (the browser said: ${message}). Reload claude.ai, then click Fetch again.`
+    : NO_CLAUDE_ACCESS));
 }
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -32,6 +35,27 @@ chrome.runtime.onInstalled.addListener(() => {
 
 const TAB_LOAD_TIMEOUT_MS = 30000;
 
+// Calls back with the tab once it has finished loading claude.ai. A woken tab
+// first reports "complete" for its restored placeholder, before the real page
+// starts loading; afterLoading waits for that real load.
+function waitForLoad(tab, callback, afterLoading = false) {
+  let loading = !afterLoading;
+  const timer = setTimeout(() => {
+    chrome.tabs.onUpdated.removeListener(onUpdated);
+    callback(null, "claude.ai didn't finish loading in 30s. Check its tab has loaded, then click Fetch again.");
+  }, TAB_LOAD_TIMEOUT_MS);
+  function onUpdated(tabId, info, updated) {
+    if (tabId !== tab.id) return;
+    if (info.status === 'loading') loading = true;
+    if (!loading || info.status !== 'complete') return;
+    if (!updated.url || !updated.url.startsWith('https://claude.ai/')) return;
+    clearTimeout(timer);
+    chrome.tabs.onUpdated.removeListener(onUpdated);
+    callback(tab);
+  }
+  chrome.tabs.onUpdated.addListener(onUpdated);
+}
+
 // Opens claude.ai in a tab that doesn't take focus: a focused tab would close
 // the popup, and with it the progress Fetch shows.
 function openClaudeTab(callback) {
@@ -40,28 +64,34 @@ function openClaudeTab(callback) {
       callback(null, "Couldn't open a claude.ai tab. Open https://claude.ai yourself, then click Fetch again.");
       return;
     }
-    const timer = setTimeout(() => {
-      chrome.tabs.onUpdated.removeListener(onUpdated);
-      callback(null, "claude.ai didn't finish loading in 30s. Check the claude.ai tab Chronicle opened, then click Fetch again.");
-    }, TAB_LOAD_TIMEOUT_MS);
-    function onUpdated(tabId, info) {
-      if (tabId !== tab.id || info.status !== 'complete') return;
-      clearTimeout(timer);
-      chrome.tabs.onUpdated.removeListener(onUpdated);
-      callback(tab);
-    }
-    chrome.tabs.onUpdated.addListener(onUpdated);
+    waitForLoad(tab, callback);
   });
 }
 
-// The active tab if it's claude.ai, else any claude.ai tab, else a new one.
+// A tab the browser unloaded to save memory (restored at startup, or Memory
+// Saver) can't be injected into; Firefox only says "An unexpected error
+// occurred". Reloading it brings the page back.
+function wakeTab(tab, callback) {
+  if (!tab.discarded) return callback(tab);
+  chrome.tabs.reload(tab.id, {}, () => {
+    if (chrome.runtime.lastError) {
+      callback(null, "Couldn't reload the claude.ai tab. Click on it so it loads, then click Fetch again.");
+      return;
+    }
+    waitForLoad(tab, callback, true);
+  });
+}
+
+// The active tab if it's claude.ai, else a loaded claude.ai tab, else an
+// unloaded one woken up, else a new one.
 function findClaudeTab(callback) {
   chrome.tabs.query({ active: true, currentWindow: true }, (active) => {
     const tab = active && active[0];
     if (tab && tab.url && tab.url.startsWith('https://claude.ai/')) return callback(tab);
     chrome.tabs.query({ url: 'https://claude.ai/*' }, (claudeTabs) => {
-      if (claudeTabs && claudeTabs.length > 0) return callback(claudeTabs[0]);
-      openClaudeTab(callback);
+      if (!claudeTabs || claudeTabs.length === 0) return openClaudeTab(callback);
+      const loaded = claudeTabs.find((t) => !t.discarded);
+      wakeTab(loaded || claudeTabs[0], callback);
     });
   });
 }
