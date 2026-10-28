@@ -162,6 +162,39 @@ with sync_playwright() as p:
         popup.evaluate("() => chrome.storage.local.set({ seenConversations: "
                        "{ a: '2026-10-20T00:00:00Z', b: '2026-10-24T00:00:00Z' } })")
         badge_becomes("2", "after exporting 1 of 3 unchanged")
+
+        # The weekly reminder. A notification's text can't be read back, so record it.
+        bg = ctx.service_workers[0]
+        days = bg.evaluate("() => chrome.alarms.get('reminder').then(a => a && (a.scheduledTime - Date.now()) / 864e5)")
+        if days is None or not 6.9 < days <= 7:
+            fail(f"the weekly reminder is due in {days} days, expected 7. Look at scheduleReminder in background.js.")
+        bg.evaluate("""() => {
+            self.__shown = [];
+            const create = chrome.notifications.create.bind(chrome.notifications);
+            chrome.notifications.create = (id, opts) => { self.__shown.push(opts.message); return create(id, opts); };
+        }""")
+        bg.evaluate("() => showReminder()")
+        shown = bg.evaluate("() => self.__shown")
+        if len(shown) != 1 or not shown[0].startswith("2 conversations changed"):
+            fail(f"with 2 conversations changed, the reminder said {shown}. Look at showReminder in background.js.")
+        bg.evaluate("() => openPopupFromReminder()")
+        left = bg.evaluate("() => new Promise((r) => setTimeout(() => chrome.notifications.getAll().then(r), 300))")
+        if left:
+            fail(f"clicking the reminder left it showing: {left}. Look at openPopupFromReminder in background.js.")
+        popup.evaluate("() => chrome.storage.local.set({ seenConversations: { a: '2026-10-20T00:00:00Z', "
+                       "b: '2026-10-25T00:00:00Z', c: '2026-10-26T00:00:00Z' } })")
+        badge_becomes("", "after exporting everything")
+        bg.evaluate("() => showReminder()")
+        shown = bg.evaluate("() => self.__shown")
+        if len(shown) != 1:
+            fail(f"with nothing changed, the reminder still said {shown[1:]}; a week with nothing new sends none. "
+                 "Look at showReminder in background.js.")
+        # A browser closed when the reminder was due reminds soon after it starts.
+        bg.evaluate("() => chrome.storage.local.set({ lastReminderAt: Date.now() - 8 * 864e5 }).then(scheduleReminder)")
+        minutes = bg.evaluate("() => chrome.alarms.get('reminder').then(a => (a.scheduledTime - Date.now()) / 6e4)")
+        if not minutes <= 1.1:
+            fail(f"a week overdue, the reminder is due in {minutes:.0f} minutes, expected about 1. "
+                 "Look at scheduleReminder in background.js.")
         ctx.unroute(ORGS)
         ctx.route(ORGS, lambda route: route.fulfill(**ANSWERS["signedOut"]))
         popup.reload()
@@ -175,4 +208,5 @@ with sync_playwright() as p:
 print(f"✓ export (Chromium): service worker up, popup at v{version} pings the claude.ai tab's content script; "
       "the sign-in gate hides the controls when signed out or challenged, Sign in opens claude.ai/login, "
       "the controls take the gate's place without a resize, with no claude.ai tab Fetch opens one behind, "
-      "and the badge counts what changed since the last export or says '!' when signed out")
+      "the badge counts what changed since the last export or says '!' when signed out, "
+      "and the weekly reminder says how many changed, skips a week with none, and is due soon when overdue")

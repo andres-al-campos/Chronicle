@@ -6,6 +6,7 @@
   "permissions": [
     "activeTab",
     "alarms",
+    "notifications",
     "scripting",
     "storage",
     "tabs"

@@ -112,18 +112,25 @@ async function countChanged(orgs) {
   return convs.filter((c) => !isUnchanged(c, seenConversations)).length;
 }
 
-async function refreshBadge() {
+// { state } from checkClaudeSession, plus changed (a count, or null when the
+// list couldn't be read) when signed in.
+async function readExportState() {
   const session = await checkClaudeSession();
-  if (session.state === 'signedOut') {
+  if (session.state !== 'signedIn') return session;
+  const changed = await countChanged(session.orgs).catch(() => null);
+  return { state: 'signedIn', changed };
+}
+
+async function refreshBadge() {
+  const { state, changed } = await readExportState();
+  if (state === 'signedOut') {
     return setBadge('!', BADGE_WARN_COLOR, "Chronicle Export: you're signed out of claude.ai. Open it to sign in.");
   }
-  if (session.state === 'noAccess') {
+  if (state === 'noAccess') {
     return setBadge('!', BADGE_WARN_COLOR, "Chronicle Export can't read claude.ai. Open it to see how to allow it.");
   }
-  // Can't tell (offline, a Cloudflare check): keep what the badge last said.
-  if (session.state !== 'signedIn') return;
-  const changed = await countChanged(session.orgs).catch(() => null);
-  if (changed === null) return;
+  // Can't tell (offline, a Cloudflare check, an unreadable list): keep what the badge last said.
+  if (state !== 'signedIn' || changed === null) return;
   const text = changed === 0 ? '' : changed > 99 ? '99+' : String(changed);
   const title = changed === 0
     ? 'Chronicle Export: nothing changed since your last export.'
@@ -146,4 +153,67 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // The popup asks after its own sign-in check, since you may have just signed in.
 chrome.runtime.onMessage.addListener((request) => {
   if (request.action === 'refreshBadge') refreshBadge();
+});
+
+// ──────────────────────────── weekly reminder ────────────────────────────
+// A notification once a week, so exporting doesn't depend on remembering.
+// Clicking it opens the popup; nothing opens on its own. Firefox forgets alarms
+// when it quits, so the due time lives in storage and the alarm is set again
+// from it whenever the background starts.
+
+const REMINDER_ALARM = 'reminder';
+const REMINDER_ID = 'chronicle-reminder';
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+async function scheduleReminder() {
+  let { lastReminderAt } = await chrome.storage.local.get(['lastReminderAt']);
+  if (!lastReminderAt) {
+    lastReminderAt = Date.now();
+    await chrome.storage.local.set({ lastReminderAt });
+  }
+  // Overdue (the browser was closed when it was due): remind a minute after start.
+  const when = Math.max(lastReminderAt + WEEK_MS, Date.now() + 60 * 1000);
+  chrome.alarms.create(REMINDER_ALARM, { when });
+}
+
+async function showReminder() {
+  await chrome.storage.local.set({ lastReminderAt: Date.now() });
+  scheduleReminder();
+  const { state, changed } = await readExportState();
+  let message;
+  if (state === 'signedIn' && changed === 0) return; // nothing to export this week
+  if (state === 'signedIn' && changed !== null) {
+    message = `${changed} conversation${changed === 1 ? '' : 's'} changed since your last export. Click to export.`;
+  } else if (state === 'signedOut') {
+    message = "Time to export. You're signed out of claude.ai, so click to sign in first.";
+  } else {
+    message = 'Time to export your Claude conversations. Click to open Chronicle Export.';
+  }
+  chrome.notifications.create(REMINDER_ID, {
+    type: 'basic',
+    iconUrl: chrome.runtime.getURL('icon128.png'),
+    title: 'Chronicle Export',
+    message
+  });
+}
+
+// openPopup needs a user gesture in some browsers, and a notification click
+// doesn't always count; a window showing the same popup is the fallback.
+async function openPopupFromReminder() {
+  chrome.notifications.clear(REMINDER_ID);
+  try {
+    await chrome.action.openPopup();
+  } catch (err) {
+    chrome.windows.create({ url: chrome.runtime.getURL('popup.html'), type: 'popup', width: 520, height: 640 });
+  }
+}
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === REMINDER_ALARM) showReminder();
+});
+chrome.notifications.onClicked.addListener((id) => {
+  if (id === REMINDER_ID) openPopupFromReminder();
+});
+chrome.alarms.get(REMINDER_ALARM, (alarm) => {
+  if (!alarm) scheduleReminder();
 });

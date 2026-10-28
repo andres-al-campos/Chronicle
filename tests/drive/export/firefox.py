@@ -131,6 +131,42 @@ try:
             time.sleep(0.1)
         else:
             fail(f"signed out, the toolbar badge says {badge!r}, expected '!'. Look at refreshBadge in background.js.")
+    shown_as = None
+    # The weekly reminder, run from the background page; clicking it shows the popup.
+    if gate["title"] == SIGNED_OUT:
+        days = run("chrome.alarms.get('reminder').then(a => done(a && (a.scheduledTime - Date.now()) / 864e5));")
+        if days is None or not 6.9 < days <= 7:
+            fail(f"the weekly reminder is due in {days} days, expected 7. Look at scheduleReminder in background.js.")
+        shown = run("""chrome.runtime.getBackgroundPage().then(async (bg) => {
+            const shown = [];
+            const create = bg.chrome.notifications.create.bind(bg.chrome.notifications);
+            bg.chrome.notifications.create = (id, opts) => { shown.push(opts.message); return create(id, opts); };
+            await bg.showReminder();
+            bg.chrome.notifications.create = create;
+            done(shown);
+        });""")
+        if len(shown) != 1 or "signed out" not in shown[0]:
+            fail(f"signed out, the reminder said {shown}; it should say to sign in first. "
+                 "Look at showReminder in background.js.")
+        run("chrome.runtime.getBackgroundPage().then((bg) => bg.openPopupFromReminder()).then(() => done());")
+        time.sleep(2)
+        # The toolbar popup is a panel in the browser window, not a tab; the fallback is a window.
+        d.set_context("chrome")
+        shown_as = d.execute_script("""
+            for (const w of Services.wm.getEnumerator(null)) {
+                for (const b of w.document.querySelectorAll('panel browser')) {
+                    if (b.closest('panel').state === 'open' && b.currentURI.spec.endsWith('/popup.html')) return 'popup';
+                }
+                if (w.document.documentElement.getAttribute('chromehidden') && w.gBrowser
+                    && w.gBrowser.selectedBrowser.currentURI.spec.endsWith('/popup.html')) return 'window';
+            }
+            return null;""")
+        d.set_context("content")
+        if not shown_as:
+            fail("clicking the reminder showed no popup. Look at openPopupFromReminder in background.js.")
+        left = run("setTimeout(() => chrome.notifications.getAll().then(done), 300);")
+        if left:
+            fail(f"clicking the reminder left it showing: {left}. Look at openPopupFromReminder in background.js.")
     gate_seen = "signed out, badge '!'" if gate["title"] == SIGNED_OUT else "Cloudflare challenge"
     if gate["title"] == SIGNED_OUT:
         before = set(d.window_handles)
@@ -154,6 +190,11 @@ try:
 finally:
     d.quit()
 
+if shown_as:
+    reminder_seen = ("the weekly reminder says to sign in and its click opens the "
+                     + ("toolbar popup" if shown_as == "popup" else "popup in a window"))
+else:
+    reminder_seen = "the reminder unchecked (claude.ai sent a Cloudflare check, not 'signed out')"
 print(f"✓ export (Firefox): access granted at install, popup at v{version} pings the claude.ai tab "
-      "(opening one behind when none is open), "
-      f"the gate hides the controls ({gate_seen}), and with access off it says where to allow claude.ai")
+      f"(opening one behind when none is open), {reminder_seen}, the gate hides the controls ({gate_seen}), "
+      "and with access off it says where to allow claude.ai")
