@@ -52,9 +52,14 @@ One build runs in both browsers.
   `extension/manifest.json` for a live-reload dev copy). Temporary add-ons are
   removed when Firefox quits.
 
-Open `claude.ai`, sign in, and use the extension's toolbar popup to export your
-history. It needs access to claude.ai, which both browsers grant at install. If you
-turn it off later, Fetch says where to turn it back on: in Firefox, `about:addons` →
+Click Chronicle Export in the toolbar to export your history. If you're signed out
+of claude.ai, the popup says so and its **Sign in** button takes you there; Fetch
+opens a claude.ai tab itself when none is open. The toolbar badge counts the
+conversations changed since your last export (or shows "!" when you're signed out),
+and a weekly notification reminds you when there's something new.
+
+It needs access to claude.ai, which both browsers grant at install. If you turn it
+off later, the popup says where to turn it back on: in Firefox, `about:addons` →
 Chronicle Export → **Permissions**; in Chrome, the extension's **Details** →
 **Site access**.
 
