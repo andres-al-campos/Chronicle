@@ -93,7 +93,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 const BADGE_ALARM = 'badge';
 const BADGE_PERIOD_MIN = 60;
-const BADGE_COUNT_COLOR = '#5436DA';
+const BADGE_COUNT_COLOR = '#5F6368';
 const BADGE_WARN_COLOR = '#C5221F';
 
 function setBadge(text, color, title) {
