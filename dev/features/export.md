@@ -1,6 +1,6 @@
 # Export
 
-Updated 2026-10-27 19:56, at 0.4.0.
+Updated 2026-10-27 20:17, at 0.4.0.
 
 The browser extension saves your claude.ai conversations to a JSON file the
 pipeline ingests. The same build runs in Chrome and Firefox.
@@ -15,8 +15,9 @@ pipeline ingests. The same build runs in Chrome and Firefox.
   instead, since signing in again wouldn't help. A run in progress or a fetched
   list waiting to download skips the gate: downloading needs no sign-in.
 - **Fetch**: all conversations, or those updated between two dates. Runs in
-  the claude.ai tab with your signed-in session, so closing the popup doesn't
-  stop it; progress, elapsed time and a log show when the popup reopens.
+  a claude.ai tab with your signed-in session, so closing the popup doesn't
+  stop it. With no claude.ai tab open, it opens one behind the current tab and
+  waits up to 30s for it to load; progress, elapsed time and a log show when the popup reopens.
   Cancel stops it.
 - **Only what changed**: conversations not updated since they were last
   downloaded are skipped. Ones that have since disappeared from claude.ai are
@@ -31,8 +32,7 @@ pipeline ingests. The same build runs in Chrome and Firefox.
 ## How to get to it
 
 Install the build (see the README) and click Chronicle Export in the toolbar.
-Signed out, the popup's Sign in takes you to claude.ai. Fetch works from any tab
-while a claude.ai tab is open.
+Signed out, the popup's Sign in takes you to claude.ai. Fetch works from any tab.
 
 ## Driving it
 
@@ -42,7 +42,8 @@ Playwright's Chromium (`uvx playwright@1.58.0 install chromium`). No sign-in.
 `./build.sh drive export` (~20s): builds, then in headless Chromium and
 headless Firefox opens claude.ai's login page and the popup, and checks the
 popup shows the manifest's version and reaches the claude.ai tab's content
-script the way Fetch does.
+script the way Fetch does. Then it closes every claude.ai tab and checks Fetch
+opens one, reaches it, and leaves the popup's tab in front.
 
 The sign-in gate, in Chromium with claude.ai's `/api/organizations` mocked:
 signed out and challenged both hide the controls and read differently, Sign in
@@ -56,8 +57,9 @@ Fetch and Download against a signed-in account are by hand only: they need a
 real account, and a session must not sign in for the user.
 
 Last driven: 2026-10-27, Chromium 145 and Firefox 146 (Firefox got "signed
-out"). Both passed; with the gate skipped (`openApp()` in place of
-`runGate()`), both failed.
+out"). Both passed. Both failed with the gate skipped (`openApp()` in place of
+`runGate()`), with Fetch giving up when no claude.ai tab is open, and with the
+tab it opens taking focus.
 
 ## Gotchas
 
@@ -84,7 +86,13 @@ out"). Both passed; with the gate skipped (`openApp()` in place of
 
 ## Calls
 
+- 2026-10-27 20:17, 0.4.0. Fetch opens claude.ai itself when no tab is open (Alejandro, in the plan for
+  less sign-in friction). It opens behind, since a focused tab closes the popup
+  and its progress; that part is a guess.
+
 - 2026-10-27 19:56, 0.4.0. No controls until the sign-in check passes; the gate uses their space to say
   what's wrong (Alejandro: "i shouldnt even show you the controls until you
   signed in. so it can use that space to notify you"). Applies *Motion spends
   attention*: the popup opens at its final size and the gate's answer fades in.
+- 2026-10-27 20:17, 0.4.0. A tab that takes focus closes the popup in both browsers, so anything the
+  extension opens while the popup should stay up opens with `active: false`.

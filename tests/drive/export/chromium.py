@@ -120,6 +120,20 @@ with sync_playwright() as p:
         if res.get("error") or pong.get("version") != version:
             fail(f"popup couldn't reach the claude.ai tab: {res}. "
                  "Look at background.js (injection) and content.js (the ping handler).")
+
+        # With no claude.ai tab open, Fetch opens one without taking focus.
+        claude.close()
+        res = popup.evaluate(ENSURE_AND_PING)
+        pong = res.get("pong") or {}
+        opened = [pg for pg in ctx.pages if pg.url.startswith("https://claude.ai/")]
+        if res.get("error") or pong.get("version") != version or not opened:
+            fail(f"with no claude.ai tab open, Fetch didn't reach a new one: {res}. "
+                 "Look at openClaudeTab in background.js.")
+        front = popup.evaluate("() => new Promise((r) => chrome.tabs.query("
+                               "{ active: true, currentWindow: true }, (t) => r(t[0] && t[0].url)))")
+        if not (front or "").startswith("chrome-extension://"):
+            fail(f"the claude.ai tab Fetch opened took focus ({front}), which closes a real popup. "
+                 "Open it with active: false in background.js.")
         if errors:
             fail(f"popup threw: {errors}. Open popup.html's console in chrome://extensions to see where.")
     finally:
@@ -127,4 +141,4 @@ with sync_playwright() as p:
 
 print(f"✓ export (Chromium): service worker up, popup at v{version} pings the claude.ai tab's content script; "
       "the sign-in gate hides the controls when signed out or challenged, Sign in opens claude.ai/login, "
-      "and the controls take the gate's place without a resize")
+      "the controls take the gate's place without a resize, and with no claude.ai tab Fetch opens one behind")

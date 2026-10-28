@@ -99,6 +99,26 @@ try:
         fail(f"popup couldn't reach the claude.ai tab: {res}. "
              "Look at background.js (injection) and content.js (the ping handler).")
 
+    # With no claude.ai tab open, Fetch opens one without taking focus.
+    popup = d.current_window_handle
+    for handle in d.window_handles:
+        d.switch_to.window(handle)
+        if d.current_url.startswith("https://claude.ai/"):
+            d.close()
+    d.switch_to.window(popup)
+    before = set(d.window_handles)
+    res = run(ENSURE_AND_PING)
+    pong = res.get("pong") or {}
+    if res.get("error") or pong.get("version") != version or not set(d.window_handles) - before:
+        fail(f"with no claude.ai tab open, Fetch didn't reach a new one: {res}. "
+             "Look at openClaudeTab in background.js.")
+    d.set_context("chrome")
+    front = d.execute_script("return gBrowser.selectedBrowser.currentURI.spec")
+    d.set_context("content")
+    if not front.startswith("moz-extension://"):
+        fail(f"the claude.ai tab Fetch opened took focus ({front}), which closes the popup. "
+             "Open it with active: false in background.js.")
+
     gate = settled_gate()
     if not gate["gated"] or gate["controls"] or gate["title"] not in (SIGNED_OUT, CHALLENGE):
         fail(f"signed out, the popup should hide its controls behind the gate; it shows {gate}. "
@@ -126,5 +146,6 @@ try:
 finally:
     d.quit()
 
-print(f"✓ export (Firefox): access granted at install, popup at v{version} pings the claude.ai tab, "
+print(f"✓ export (Firefox): access granted at install, popup at v{version} pings the claude.ai tab "
+      "(opening one behind when none is open), "
       f"the gate hides the controls ({gate_seen}), and with access off it says where to allow claude.ai")
